@@ -1,0 +1,175 @@
+/* Estilos personalizados para el visor de PDF.js - Versión mejorada */
+
+/* Ocultar los controles originales que no necesitamos */
+#toolbarViewerRight,
+#secondaryToolbarToggle,
+#sidebarToggleButton,
+#viewBookmark,
+#secondaryPresentationMode,
+#secondaryOpenFile,
+#secondaryPrint,
+#secondaryDownload,
+#secondaryViewBookmark,
+#viewFind,
+#editorModeButtons {
+  display: none !important;
+}
+
+/* Ocultar elementos específicos dentro de toolbarViewerLeft y toolbarViewerMiddle */
+#toolbarViewerLeft .toolbarButton,
+#toolbarViewerLeft .splitToolbarButton,
+#toolbarViewerLeft .toolbarButtonSpacer,
+#toolbarViewerLeft .toolbarButtonWithContainer,
+#toolbarViewerLeft .loadingInput,
+#toolbarViewerLeft #pageNumber,
+#toolbarViewerLeft #numPages,
+#toolbarViewerMiddle #zoomOutButton,
+#toolbarViewerMiddle #zoomInButton,
+#toolbarViewerMiddle #scaleSelectContainer,
+#toolbarViewerMiddle .splitToolbarButtonSeparator {
+  display: none !important;
+}
+
+/* Mantener visible el contenedor toolbarViewerLeft */
+#toolbarViewerLeft {
+  display: flex !important;
+  width: 100% !important;
+}
+
+/* Ocultar toolbarViewerMiddle */
+#toolbarViewerMiddle {
+  display: none !important;
+}
+
+/* Estilos para los controles personalizados integrados */
+.pdf-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  gap: 10px;
+}
+
+.pdf-page-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pdf-zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Estilo moderno para los botones */
+.pdf-control-button {
+  background-color: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--main-color);
+  transition: all 0.2s ease;
+  backdrop-filter: blur(5px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.pdf-control-button:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.pdf-control-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.1);
+}
+
+.pdf-control-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Estilo moderno para los textos */
+.pdf-page-info,
+.pdf-zoom-level {
+  margin: 0 8px;
+  font-size: 14px;
+  color: var(--main-color);
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  font-weight: 500;
+  background-color: rgba(255, 255, 255, 0.05);
+  padding: 4px 10px;
+  border-radius: 6px;
+  min-width: 60px;
+  text-align: center;
+}
+
+/* Estilos para SVG dentro de los botones */
+.pdf-control-button svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 2;
+  transition: all 0.2s ease;
+}
+
+.pdf-control-button:hover svg {
+  stroke-width: 2.2;
+}
+
+/* Estilos específicos para el botón de restablecer zoom */
+#zoom-reset .desktop-icon {
+  display: inline-block;
+}
+
+#zoom-reset .mobile-text {
+  display: none;
+}
+
+/* Botón de restablecer zoom para móvil */
+#zoom-reset-mobile {
+  display: none;
+}
+
+/* Ajustes para móvil */
+@media (max-width: 768px) {
+  .hidden-mobile {
+    display: none;
+  }
+
+  .pdf-page-info,
+  .pdf-zoom-level {
+    min-width: 40px;
+    font-size: 12px;
+    padding: 4px 6px;
+  }
+
+  .pdf-control-button {
+    padding: 4px 8px;
+  }
+
+  /* Ocultar el botón de restablecer zoom normal en móvil */
+  #zoom-reset {
+    display: none;
+  }
+
+  /* Mostrar el botón de restablecer zoom específico para móvil */
+  #zoom-reset-mobile {
+    display: flex;
+    min-width: 32px;
+    padding: 4px 6px;
+  }
+
+  #zoom-reset-mobile svg {
+    width: 16px;
+    height: 16px;
+  }
+}

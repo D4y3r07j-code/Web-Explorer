@@ -1,0 +1,98 @@
+/* Estilos para el sistema de seguridad del visor de PDF */
+
+/* Contenedor modal para advertencias y bloqueo */
+.pdf-security-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.95);
+  z-index: 2000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Contenedor del contenido de la modal */
+.pdf-security-content {
+  max-width: 500px;
+  width: 90%;
+  text-align: center;
+  color: white;
+  padding: 20px;
+}
+
+/* Icono de advertencia */
+.pdf-security-icon {
+  width: 70px;
+  height: 70px;
+  margin: 0 auto 20px;
+}
+
+.pdf-security-icon svg {
+  width: 100%;
+  height: 100%;
+  fill: #ff3b30;
+}
+
+/* Icono de prohibición para el bloqueo */
+.pdf-security-icon-blocked svg {
+  fill: #ff3b30;
+}
+
+/* Título de la advertencia */
+.pdf-security-title {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: white;
+}
+
+/* Mensaje de la advertencia */
+.pdf-security-message {
+  font-size: 16px;
+  line-height: 1.5;
+  margin-bottom: 30px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Botón de entendido */
+.pdf-security-button {
+  background-color: #333;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.pdf-security-button:hover {
+  background-color: #444;
+}
+
+/* Estilos para el título de bloqueo */
+.pdf-security-title-blocked {
+  color: #ff3b30;
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 20px;
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.pdf-security-modal {
+  animation: fadeIn 0.3s ease-out;
+}

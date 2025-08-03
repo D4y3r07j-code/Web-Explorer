@@ -1,0 +1,20 @@
+# Activar el motor de reescritura
+RewriteEngine On
+RewriteBase /Web-Explorer/
+
+# Redirección de HTTP a HTTPS
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Regla para múltiples tipos de archivos (PDF)
+RewriteCond %{REQUEST_URI} ^/Web-Explorer/campamentos/(.+)\.(pdf)$ [NC]
+RewriteRule ^campamentos/(.+)\.([a-z]+)$ viewer.php?file=$1.$2 [L,R=302,QSA]
+
+# Configuración adicional
+DirectoryIndex index.php
+<FilesMatch "\.php$">
+    Order Allow,Deny
+    Allow from all
+</FilesMatch>
+Options -MultiViews
+

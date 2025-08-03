@@ -1,0 +1,493 @@
+// Sistema de seguridad para el visor de PDF
+
+// Configuración del sistema de seguridad
+const pdfSecurityConfig = {
+  maxAttempts: 3, // Número máximo de intentos antes del bloqueo
+  blockDuration: 60000, // Duración del bloqueo en milisegundos (1 minuto)
+  storageKeyAttempts: "pdfSecurityAttempts",
+  storageKeyBlockTime: "pdfSecurityBlockTime",
+}
+
+// Variables para el seguimiento de intentos
+let securityAttempts = Number.parseInt(localStorage.getItem(pdfSecurityConfig.storageKeyAttempts) || "0")
+let blockEndTime = Number.parseInt(localStorage.getItem(pdfSecurityConfig.storageKeyBlockTime) || "0")
+let pdfBlocked = false
+
+// Verificar si hay un bloqueo activo al cargar
+document.addEventListener("DOMContentLoaded", () => {
+  checkActiveBlock()
+
+  // Esperar a que PDF.js se inicialice completamente
+  function waitForPDFJS() {
+    if (window.PDFViewerApplication && window.PDFViewerApplication.initialized) {
+      setupPDFSecurity()
+    } else {
+      setTimeout(waitForPDFJS, 100)
+    }
+  }
+
+  waitForPDFJS()
+})
+
+// Verificar si hay un bloqueo activo
+function checkActiveBlock() {
+  const now = Date.now()
+
+  if (blockEndTime > now) {
+    // Todavía hay un bloqueo activo
+    pdfBlocked = true
+    showPDFBlockedModal()
+
+    // Iniciar temporizador para desbloquear
+    const remainingTime = blockEndTime - now
+    setTimeout(() => {
+      unblockPDF()
+    }, remainingTime)
+  } else if (blockEndTime > 0) {
+    // El bloqueo ha expirado
+    unblockPDF()
+  }
+}
+
+// Configurar la seguridad del PDF
+function setupPDFSecurity() {
+  // Deshabilitar botones de descarga e impresión
+  disablePDFButtons()
+
+  // Interceptar eventos de teclado para bloquear atajos
+  document.addEventListener("keydown", handleKeyboardShortcuts, true)
+
+  // Bloquear clic derecho - Aplicar específicamente al visor
+  document.addEventListener("contextmenu", handleContextMenu, true)
+
+  // Aplicar específicamente al contenedor del visor para mayor seguridad
+  const viewerContainer = document.getElementById("viewerContainer")
+  if (viewerContainer) {
+    viewerContainer.addEventListener("contextmenu", handleContextMenu, true)
+  }
+
+  // Aplicar al visor de PDF
+  const viewer = document.getElementById("viewer")
+  if (viewer) {
+    viewer.addEventListener("contextmenu", handleContextMenu, true)
+  }
+
+  // Bloquear arrastrar y soltar
+  document.addEventListener("dragstart", handleDragStart, true)
+
+  // Bloquear copiar
+  document.addEventListener("copy", handleCopy, true)
+
+  // Bloquear impresión
+  window.addEventListener("beforeprint", handlePrint, true)
+
+  // Bloquear selección de texto en el visor (opcional, pero aumenta la seguridad)
+  if (viewerContainer) {
+    viewerContainer.addEventListener(
+      "selectstart",
+      (e) => {
+        // Permitir selección solo para búsqueda y campos de entrada
+        if (e.target.id !== "findInput" && e.target.tagName !== "INPUT" && e.target.tagName !== "TEXTAREA") {
+          e.preventDefault()
+          return false
+        }
+      },
+      false,
+    )
+  }
+
+  // NUEVO: Bloqueo agresivo de impresión
+  implementAggressivePrintBlocking()
+}
+
+// NUEVO: Implementar bloqueo agresivo de impresión
+function implementAggressivePrintBlocking() {
+  // 1. Sobreescribir el método window.print()
+  const originalPrint = window.print
+  window.print = () => {
+    console.log("Intento de impresión bloqueado")
+    registerSecurityViolation("imprimir")
+    return false
+  }
+
+  // 2. Sobreescribir métodos específicos de PDF.js
+  if (window.PDFViewerApplication) {
+    // Sobreescribir la función de impresión de PDF.js
+    window.PDFViewerApplication.print = () => {
+      console.log("Intento de impresión de PDF.js bloqueado")
+      registerSecurityViolation("imprimir")
+      return false
+    }
+
+    // Sobreescribir el método de apertura del diálogo de impresión
+    if (window.PDFViewerApplication.printService) {
+      window.PDFViewerApplication.printService.showDialog = () => {
+        console.log("Intento de mostrar diálogo de impresión bloqueado")
+        registerSecurityViolation("imprimir")
+        return false
+      }
+    }
+  }
+
+  // 3. Bloquear el evento de impresión a nivel de iframe
+  try {
+    const parentWindow = window.parent || window
+    parentWindow.addEventListener(
+      "beforeprint",
+      (e) => {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        registerSecurityViolation("imprimir")
+        return false
+      },
+      true,
+    )
+  } catch (e) {
+    console.log("No se pudo acceder a la ventana padre")
+  }
+
+  // 4. Observar cambios en el DOM para detectar diálogos de impresión
+  const printDialogObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      if (mutation.type === "childList" && mutation.addedNodes.length > 0) {
+        for (const node of mutation.addedNodes) {
+          if (node.nodeType === 1) {
+            // Es un elemento
+            // Buscar diálogos o elementos relacionados con la impresión
+            if (
+              node.id === "printServiceDialog" ||
+              node.id === "printContainer" ||
+              node.classList.contains("printServiceDialog")
+            ) {
+              node.style.display = "none"
+              registerSecurityViolation("imprimir")
+            }
+          }
+        }
+      }
+    }
+  })
+
+  // Observar todo el documento para detectar diálogos de impresión
+  printDialogObserver.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  })
+
+  // 5. Deshabilitar la función de impresión en el objeto window
+  Object.defineProperty(window, "print", {
+    value: () => {
+      console.log("Función de impresión bloqueada")
+      registerSecurityViolation("imprimir")
+      return false
+    },
+    writable: false,
+    configurable: false,
+  })
+
+  // 6. Bloquear la apertura de la ventana de impresión mediante CSS
+  const printBlockStyle = document.createElement("style")
+  printBlockStyle.textContent = `
+    @media print {
+      body * {
+        display: none !important;
+        visibility: hidden !important;
+      }
+      body:after {
+        content: "IMPRESIÓN NO PERMITIDA";
+        display: block !important;
+        visibility: visible !important;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        font-size: 50px;
+        font-weight: bold;
+        color: #ff0000;
+        text-align: center;
+        padding-top: 40vh;
+        background-color: white;
+        z-index: 9999;
+      }
+    }
+  `
+  document.head.appendChild(printBlockStyle)
+
+  // 7. Bloquear la apertura del diálogo de impresión mediante iframe
+  try {
+    // Intentar acceder al iframe principal si estamos en uno
+    if (window.frameElement) {
+      const parentDoc = window.parent.document
+      const printBlockStyleParent = document.createElement("style")
+      printBlockStyleParent.textContent = `
+        @media print {
+          iframe {
+            display: none !important;
+          }
+        }
+      `
+      parentDoc.head.appendChild(printBlockStyleParent)
+    }
+  } catch (e) {
+    console.log("No se pudo acceder al documento padre")
+  }
+}
+
+// Deshabilitar botones de descarga e impresión
+function disablePDFButtons() {
+  const buttons = ["download", "print", "secondaryDownload", "secondaryPrint", "openFile", "secondaryOpenFile"]
+
+  buttons.forEach((id) => {
+    const button = document.getElementById(id)
+    if (button) {
+      // Añadir evento para capturar clics en estos botones
+      button.addEventListener(
+        "click",
+        (e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          registerSecurityViolation("descargar o imprimir")
+          return false
+        },
+        true,
+      )
+    }
+  })
+
+  // Sobreescribir funciones nativas de PDF.js
+  if (window.PDFViewerApplication) {
+    // Sobreescribir función de descarga
+    const originalDownload = window.PDFViewerApplication.download
+    window.PDFViewerApplication.download = () => {
+      registerSecurityViolation("descargar")
+      return false
+    }
+
+    // Sobreescribir función de impresión
+    const originalPrint = window.PDFViewerApplication.print
+    window.PDFViewerApplication.print = () => {
+      registerSecurityViolation("imprimir")
+      return false
+    }
+  }
+}
+
+// Manejar atajos de teclado
+function handleKeyboardShortcuts(e) {
+  // Bloquear: Ctrl+P, Command+P (imprimir)
+  // Bloquear: Ctrl+S, Command+S (guardar)
+  // Bloquear: Ctrl+Shift+P, Command+Shift+P (imprimir en Firefox/Chrome)
+  // Bloquear: Ctrl+U, Command+U (ver código fuente)
+  if (
+    (e.ctrlKey || e.metaKey) &&
+    (e.key === "p" ||
+      e.key === "P" ||
+      e.key === "s" ||
+      e.key === "S" ||
+      e.key === "u" ||
+      e.key === "U" ||
+      (e.shiftKey && (e.key === "p" || e.key === "P")))
+  ) {
+    e.preventDefault()
+    e.stopPropagation()
+
+    let action = ""
+    if (e.key.toLowerCase() === "p") {
+      action = "imprimir"
+    } else if (e.key.toLowerCase() === "s") {
+      action = "guardar"
+    } else if (e.key.toLowerCase() === "u") {
+      action = "ver código fuente"
+    }
+
+    registerSecurityViolation(action)
+    return false
+  }
+}
+
+// Manejar clic derecho
+function handleContextMenu(e) {
+  e.preventDefault()
+  e.stopPropagation()
+  registerSecurityViolation("menú contextual")
+  return false
+}
+
+// Manejar arrastrar y soltar
+function handleDragStart(e) {
+  e.preventDefault()
+  registerSecurityViolation("arrastrar contenido")
+  return false
+}
+
+// Manejar copiar
+function handleCopy(e) {
+  // Permitir copia en campos de entrada
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
+    return true
+  }
+
+  e.preventDefault()
+  registerSecurityViolation("copiar contenido")
+  return false
+}
+
+// Manejar impresión
+function handlePrint(e) {
+  e.preventDefault()
+  e.stopPropagation()
+  registerSecurityViolation("imprimir")
+  return false
+}
+
+// Registrar una violación de seguridad
+function registerSecurityViolation(action) {
+  if (pdfBlocked) return // No hacer nada si ya está bloqueado
+
+  securityAttempts++
+  localStorage.setItem(pdfSecurityConfig.storageKeyAttempts, securityAttempts.toString())
+
+  if (securityAttempts === 1) {
+    // Primer intento: mostrar advertencia inicial
+    showFirstWarningModal(action)
+  } else if (securityAttempts === 2) {
+    // Segundo intento: mostrar advertencia final
+    showFinalWarningModal()
+  } else if (securityAttempts >= pdfSecurityConfig.maxAttempts) {
+    // Tercer intento: bloquear el PDF
+    blockPDF()
+  }
+}
+
+// Mostrar la primera advertencia
+function showFirstWarningModal(action) {
+  const modal = document.createElement("div")
+  modal.className = "pdf-security-modal"
+  modal.id = "pdfSecurityModal"
+
+  modal.innerHTML = `
+    <div class="pdf-security-content">
+      <div class="pdf-security-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+          <path d="M12 2L1 21h22L12 2zm0 4l7.53 13H4.47L12 6zm-1 5v4h2v-4h-2zm0 6v2h2v-2h-2z"/>
+        </svg>
+      </div>
+      <h2 class="pdf-security-title">Acción no permitida</h2>
+      <p class="pdf-security-message">Por razones de seguridad, no se permite guardar o imprimir este documento. El contenido está protegido.</p>
+      <button class="pdf-security-button" id="pdfSecurityButton">Entendido</button>
+    </div>
+  `
+
+  document.body.appendChild(modal)
+
+  // Añadir evento al botón
+  document.getElementById("pdfSecurityButton").addEventListener("click", () => {
+    document.body.removeChild(modal)
+  })
+}
+
+// Mostrar la advertencia final
+function showFinalWarningModal() {
+  const modal = document.createElement("div")
+  modal.className = "pdf-security-modal"
+  modal.id = "pdfSecurityModal"
+
+  modal.innerHTML = `
+    <div class="pdf-security-content">
+      <div class="pdf-security-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+          <path d="M12 2L1 21h22L12 2zm0 4l7.53 13H4.47L12 6zm-1 5v4h2v-4h-2zm0 6v2h2v-2h-2z"/>
+        </svg>
+      </div>
+      <h2 class="pdf-security-title">Acción no permitida</h2>
+      <p class="pdf-security-message">ADVERTENCIA: Este es su segundo intento. Un intento más y el documento será bloqueado.</p>
+      <button class="pdf-security-button" id="pdfSecurityButton">Entendido</button>
+    </div>
+  `
+
+  document.body.appendChild(modal)
+
+  // Añadir evento al botón
+  document.getElementById("pdfSecurityButton").addEventListener("click", () => {
+    document.body.removeChild(modal)
+  })
+}
+
+// Mostrar la pantalla de bloqueo
+function showPDFBlockedModal() {
+  // Eliminar cualquier modal existente
+  const existingModal = document.getElementById("pdfSecurityModal")
+  if (existingModal) {
+    document.body.removeChild(existingModal)
+  }
+
+  const modal = document.createElement("div")
+  modal.className = "pdf-security-modal"
+  modal.id = "pdfSecurityModal"
+
+  modal.innerHTML = `
+    <div class="pdf-security-content">
+      <div class="pdf-security-icon pdf-security-icon-blocked">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2c4.42 0 8 3.58 8 8 0 1.85-.63 3.55-1.69 4.9L7.1 5.69C8.45 4.63 10.15 4 12 4zM4 12c0-1.85.63-3.55 1.69-4.9L16.9 18.31C15.55 19.37 13.85 20 12 20c-4.42 0-8-3.58-8-8z"/>
+        </svg>
+      </div>
+      <h2 class="pdf-security-title-blocked">PDF BLOQUEADO</h2>
+      <p class="pdf-security-message">Este documento ha sido bloqueado debido a múltiples intentos de realizar acciones no permitidas.</p>
+    </div>
+  `
+
+  document.body.appendChild(modal)
+
+  // Ocultar el contenido del PDF
+  const viewerContainer = document.getElementById("viewerContainer")
+  if (viewerContainer) {
+    viewerContainer.style.display = "none"
+  }
+
+  // Activar el sistema de seguridad de la página web
+  if (window.registerInvalidAction && typeof window.registerInvalidAction === "function") {
+    window.registerInvalidAction("acceso no autorizado al PDF")
+  }
+}
+
+// Bloquear el PDF
+function blockPDF() {
+  pdfBlocked = true
+
+  // Establecer el tiempo de finalización del bloqueo
+  blockEndTime = Date.now() + pdfSecurityConfig.blockDuration
+  localStorage.setItem(pdfSecurityConfig.storageKeyBlockTime, blockEndTime.toString())
+
+  // Mostrar la pantalla de bloqueo
+  showPDFBlockedModal()
+
+  // Programar el desbloqueo
+  setTimeout(() => {
+    unblockPDF()
+  }, pdfSecurityConfig.blockDuration)
+}
+
+// Desbloquear el PDF
+function unblockPDF() {
+  pdfBlocked = false
+  securityAttempts = 0
+  blockEndTime = 0
+
+  // Actualizar el almacenamiento local
+  localStorage.setItem(pdfSecurityConfig.storageKeyAttempts, "0")
+  localStorage.setItem(pdfSecurityConfig.storageKeyBlockTime, "0")
+
+  // Eliminar la pantalla de bloqueo si existe
+  const modal = document.getElementById("pdfSecurityModal")
+  if (modal) {
+    document.body.removeChild(modal)
+  }
+
+  // Mostrar el contenido del PDF nuevamente
+  const viewerContainer = document.getElementById("viewerContainer")
+  if (viewerContainer) {
+    viewerContainer.style.display = ""
+  }
+}
