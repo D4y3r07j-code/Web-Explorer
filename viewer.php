@@ -22,12 +22,15 @@ $file_name = basename($full_path);
 $folder_path = dirname($file_path);
 $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
 
+// Solo permitir archivos PDF
+if ($file_ext !== 'pdf') {
+    header('Location: index.php');
+    exit;
+}
+
 // Obtener información del archivo
 $file_size = filesize($full_path);
 $file_modified = filemtime($full_path);
-
-// Determinar si es un PDF para mostrar el visor
-$is_pdf = ($file_ext === 'pdf');
 
 // Crear una URL segura para el PDF
 $pdf_url = './src/get-pdf.php?file=' . urlencode($file_path);
@@ -67,38 +70,12 @@ $back_url = 'folder.php?path=' . urlencode($folder_path);
             </div>
             
             <div class="viewer-container">
-                <?php if ($is_pdf): ?>
                 <!-- Usar el visor incorporado de PDF.js -->
                 <iframe src="./includes/pdfjs/web/viewer.html?file=<?php echo urlencode('/Web-Explorer/' . $pdf_url); ?>" 
                         width="100%" 
                         height="100%" 
                         style="border: none; min-height: 70vh;">
                 </iframe>
-                <?php else: ?>
-                <div class="file-preview">
-                    <?php if (in_array($file_ext, ['jpg', 'jpeg', 'png', 'gif'])): ?>
-                        <img src="<?php echo $full_path; ?>" alt="<?php echo $file_name; ?>" class="preview-image">
-                    <?php elseif (in_array($file_ext, ['mp4', 'webm'])): ?>
-                        <video controls class="preview-video">
-                            <source src="<?php echo $full_path; ?>" type="video/<?php echo $file_ext; ?>">
-                            Tu navegador no soporta la reproducción de video.
-                        </video>
-                    <?php else: ?>
-                        <div class="file-info">
-                            <div class="file-icon large">
-                                <i class="<?php echo getFileIcon($file_ext); ?>"></i>
-                            </div>
-                            <h3><?php echo $file_name; ?></h3>
-                            <p>Tipo: <?php echo strtoupper($file_ext); ?></p>
-                            <p>Tamaño: <?php echo formatFileSize($file_size); ?></p>
-                            <p>Modificado: <?php echo date('d/m/Y H:i', $file_modified); ?></p>
-                            <a href="<?php echo $full_path; ?>" download class="download-btn">
-                                <i class="fas fa-download"></i> Descargar
-                            </a>
-                        </div>
-                    <?php endif; ?>
-                </div>
-                <?php endif; ?>
             </div>
         </div>
     </main>
@@ -109,17 +86,6 @@ $back_url = 'folder.php?path=' . urlencode($folder_path);
 </html>
 
 <?php
-// Modificar la función getFileIcon para cambiar los colores de los iconos
-function getFileIcon($extension) {
-    $extension = strtolower($extension);
-    
-    $icons = [
-        'pdf' => 'fas fa-file-pdf text-danger',
-    ];
-    
-    return isset($icons[$extension]) ? $icons[$extension] : 'fas fa-file';
-}
-
 // Función para formatear el tamaño del archivo
 function formatFileSize($bytes) {
     $units = ['B', 'KB', 'MB', 'GB', 'TB'];

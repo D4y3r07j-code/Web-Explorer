@@ -11,8 +11,9 @@ if (!file_exists($root_dir) || !is_dir($root_dir)) {
 // Obtener todas las carpetas en el directorio raíz
 $folders = array_filter(glob($root_dir . '/*'), 'is_dir');
 
-// Función para contar archivos y subcarpetas
+// Función para contar archivos PDF y subcarpetas
 function countContents($dir) {
+    // Solo contar archivos PDF
     $files = count(array_filter(glob("$dir/*.pdf"), 'is_file'));
     $subdirs = count(array_filter(glob("$dir/*"), 'is_dir'));
     return ['files' => $files, 'subdirs' => $subdirs];
@@ -37,7 +38,6 @@ function countContents($dir) {
         <div class="container">
             <h1><?php echo $title; ?></h1>
             <div class="header-icons">
-                <button id="view-toggle" class="view-toggle" title="Cambiar vista"><i class="fas fa-list"></i></button>
                 <button id="refresh-btn" title="Actualizar"><i class="fas fa-sync-alt"></i></button>
                 <button id="theme-toggle" title="Cambiar tema"><i class="fas fa-moon"></i></button>
             </div>
@@ -115,12 +115,6 @@ function countContents($dir) {
             
             <div id="content-container">
                 <div class="unified-container" id="unified-list">
-                    <div class="table-header">
-                        <div class="header-icon"></div>
-                        <div class="header-name">Nombre</div>
-                        <div class="header-info">Información</div>
-                    </div>
-                    
                     <?php foreach ($folders as $folder): ?>
                         <?php 
                         $folder_name = basename($folder);
@@ -139,13 +133,10 @@ function countContents($dir) {
                             </div>
                             <div class="folder-name"><?php echo $folder_name; ?></div>
                             <div class="folder-count">
-                                <?php echo $file_count; ?> archivo<?php echo $file_count != 1 ? 's' : ''; ?>
+                                <?php echo $file_count; ?> PDF<?php echo $file_count != 1 ? 's' : ''; ?>
                                 <?php if ($subdir_count > 0): ?>
                                     - <?php echo $subdir_count; ?> subcarpeta<?php echo $subdir_count != 1 ? 's' : ''; ?>
                                 <?php endif; ?>
-                            </div>
-                            <div class="folder-date">
-                                <i class="fas fa-clock"></i> <?php echo $folder_modified_str; ?>
                             </div>
                             <div class="info-button" data-info-type="folder" data-info-name="<?php echo htmlspecialchars($folder_name); ?>" data-info-modified="<?php echo $folder_modified_str; ?>" data-info-files="<?php echo $file_count; ?>" data-info-subdirs="<?php echo $subdir_count; ?>">
                                 <i class="fas fa-info"></i>
@@ -160,7 +151,7 @@ function countContents($dir) {
                     <!-- Mensaje unificado para cuando no hay resultados -->
                     <div id="no-results-unified" class="no-results">
                         <i class="fas fa-search"></i>
-                        <p>No se encontraron archivos que coincidan con tu búsqueda</p>
+                        <p>No se encontraron elementos que coincidan con tu búsqueda</p>
                     </div>
                 </div>
             </div>

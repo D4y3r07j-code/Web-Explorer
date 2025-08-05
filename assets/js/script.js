@@ -44,16 +44,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const infoExtension = element.getAttribute("data-info-extension")
       const infoSize = element.getAttribute("data-info-size")
 
-      // Determinar el icono según la extensión
-      let fileIconClass = "fas fa-file"
-      if (infoExtension === "PDF") {
-        fileIconClass = "fas fa-file-pdf text-danger"
-      }
+      // Solo PDF
+      infoModalIcon.className = "fas fa-file-pdf text-danger"
+      infoModalTitle.textContent = "Información de PDF"
 
-      infoModalIcon.className = fileIconClass
-      infoModalTitle.textContent = "Información de archivo"
-
-      // Construir el contenido para archivos
+      // Construir el contenido para archivos PDF
       infoModalBody.innerHTML = `
         <div class="info-item">
           <div class="info-label">Nombre:</div>
@@ -61,7 +56,7 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
         <div class="info-item">
           <div class="info-label">Tipo:</div>
-          <div class="info-value">${infoExtension}</div>
+          <div class="info-value">PDF</div>
         </div>
         <div class="info-item">
           <div class="info-label">Tamaño:</div>
@@ -77,7 +72,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Mostrar la modal
     infoModal.classList.add("show")
 
-    // Prevenir que el clic se propague al elemento padre (carpeta o archivo)
+    // Prevenir que el clic se propague al elemento padre
     event.preventDefault()
     event.stopPropagation()
   }
@@ -101,6 +96,7 @@ document.addEventListener("DOMContentLoaded", () => {
       showInfoModal(infoButton)
     }
   })
+
   // Búsqueda en tiempo real
   const searchInput = document.getElementById("search-input")
   if (searchInput) {
@@ -113,67 +109,25 @@ document.addEventListener("DOMContentLoaded", () => {
   const themeToggle = document.getElementById("theme-toggle")
   if (themeToggle) {
     themeToggle.addEventListener("click", () => {
-      // Usar la función global de cambio de tema
       window.toggleTheme()
     })
-
-    // Ya no necesitamos cargar el tema guardado aquí, se hace en theme-handler.php
   }
 
   // Botón de actualizar
   const refreshBtn = document.getElementById("refresh-btn")
   if (refreshBtn) {
     refreshBtn.addEventListener("click", () => {
-      // Añadir animación antes de recargar
       const icon = refreshBtn.querySelector("i")
       icon.classList.add("fa-spin")
 
-      // Recargar después de un breve retraso para ver la animación
       setTimeout(() => {
         location.reload()
       }, 300)
     })
   }
 
-  // Cambio de vista (tarjeta/lista)
-  const viewToggle = document.getElementById("view-toggle")
-  if (viewToggle) {
-    viewToggle.addEventListener("click", function () {
-      const container = document.querySelector("main .container")
-      container.classList.toggle("list-view")
-
-      // Cambiar el icono
-      const icon = this.querySelector("i")
-      if (container.classList.contains("list-view")) {
-        icon.classList.remove("fa-list")
-        icon.classList.add("fa-th-large")
-      } else {
-        icon.classList.remove("fa-th-large")
-        icon.classList.add("fa-list")
-      }
-
-      // Guardar preferencia en localStorage
-      const view = container.classList.contains("list-view") ? "list" : "card"
-      localStorage.setItem("view", view)
-    })
-
-    // Cargar vista guardada
-    const savedView = localStorage.getItem("view")
-    if (savedView === "list") {
-      const container = document.querySelector("main .container")
-      container.classList.add("list-view")
-      const icon = viewToggle.querySelector("i")
-      icon.classList.remove("fa-list")
-      icon.classList.add("fa-th-large")
-    } else {
-      // Asegurarse de que la vista de tarjeta sea la predeterminada
-      const container = document.querySelector("main .container")
-      container.classList.remove("list-view")
-      const icon = viewToggle.querySelector("i")
-      icon.classList.remove("fa-th-large")
-      icon.classList.add("fa-list")
-    }
-  }
+  // Eliminar el cambio de vista ya que solo usamos modo tarjeta
+  // El botón de vista se mantiene oculto en el CSS
 
   // Corregir el comportamiento del botón volver en el visor
   const volverBtn = document.querySelector('.nav-button[href="javascript:history.back()"]')
@@ -207,7 +161,6 @@ document.addEventListener("DOMContentLoaded", () => {
     closeBtn.innerHTML = '<i class="fas fa-times"></i>'
     closeBtn.setAttribute("aria-label", "Cerrar")
 
-    // Asegurarse de que el botón se inserte al principio del dropdown
     if (dropdown.firstChild) {
       dropdown.insertBefore(closeBtn, dropdown.firstChild)
     } else {
@@ -221,27 +174,22 @@ document.addEventListener("DOMContentLoaded", () => {
   if (filterBtn && filterDropdown) {
     const closeBtn = createCloseButton(filterDropdown)
 
-    // Función para mostrar el filtro - Modificada para corregir el scroll
     const showFilter = () => {
-      // Ocultar el otro dropdown si está abierto
       if (sortDropdown && sortDropdown.classList.contains("show")) {
         sortDropdown.classList.remove("show")
         sortBtn.classList.remove("active")
       }
 
-      // Posicionar correctamente el dropdown en escritorio
       if (window.innerWidth > 768) {
         const btnRect = filterBtn.getBoundingClientRect()
         filterDropdown.style.top = `${btnRect.bottom + window.scrollY}px`
         filterDropdown.style.right = `${window.innerWidth - btnRect.right}px`
 
-        // Asegurar que el dropdown no cause scroll
         const viewportHeight = window.innerHeight
         const dropdownHeight = filterDropdown.offsetHeight
         const dropdownBottom = btnRect.bottom + dropdownHeight
 
         if (dropdownBottom > viewportHeight) {
-          // Si el dropdown se sale de la pantalla, ajustar su posición
           filterDropdown.style.top = `${btnRect.top - dropdownHeight + window.scrollY}px`
         }
       }
@@ -250,20 +198,17 @@ document.addEventListener("DOMContentLoaded", () => {
       filterOverlay.classList.add("show")
       filterBtn.classList.add("active")
 
-      // Marcar las opciones activas
       updateActiveFilterOptions()
     }
 
-    // Función para ocultar el filtro
     const hideFilter = () => {
       filterDropdown.classList.remove("show")
       filterOverlay.classList.remove("show")
       filterBtn.classList.remove("active")
     }
 
-    // Evento para mostrar el filtro
     filterBtn.addEventListener("click", (e) => {
-      e.stopPropagation() // Evitar que el clic se propague al documento
+      e.stopPropagation()
       if (filterDropdown.classList.contains("show")) {
         hideFilter()
       } else {
@@ -271,10 +216,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     })
 
-    // Evento para cerrar con el botón de cierre
     closeBtn.addEventListener("click", hideFilter)
 
-    // Manejar clics en las opciones de filtro
     const filterOptions = filterDropdown.querySelectorAll(".filter-option")
     filterOptions.forEach((option) => {
       option.addEventListener("click", () => {
@@ -284,7 +227,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (filterType === "type") {
           activeTypeFilter = filterValue
 
-          // Actualizar el estado visual del botón
           if (filterValue === "all") {
             filterBtn.classList.remove("active")
           } else {
@@ -292,13 +234,9 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         }
 
-        // Aplicar filtros
         filterItems()
-
-        // Actualizar opciones activas
         updateActiveFilterOptions()
 
-        // Cerrar el menú después de seleccionar
         setTimeout(() => {
           hideFilter()
         }, 200)
@@ -316,15 +254,12 @@ document.addEventListener("DOMContentLoaded", () => {
       if (dateFilterInput && dateFilterInput.value) {
         activeDateFilter = dateFilterInput.value
 
-        // Actualizar el estado visual del botón de filtro
         if (filterBtn) {
           filterBtn.classList.add("active")
         }
 
-        // Aplicar filtros
         filterItems()
 
-        // Cerrar el menú después de seleccionar
         setTimeout(() => {
           if (filterDropdown) {
             filterDropdown.classList.remove("show")
@@ -342,15 +277,12 @@ document.addEventListener("DOMContentLoaded", () => {
         dateFilterInput.value = ""
         activeDateFilter = null
 
-        // Actualizar el estado visual del botón de filtro si no hay otros filtros activos
         if (filterBtn && activeTypeFilter === "all") {
           filterBtn.classList.remove("active")
         }
 
-        // Aplicar filtros
         filterItems()
 
-        // Cerrar el menú después de seleccionar
         setTimeout(() => {
           if (filterDropdown) {
             filterDropdown.classList.remove("show")
@@ -366,27 +298,22 @@ document.addEventListener("DOMContentLoaded", () => {
   if (sortBtn && sortDropdown) {
     const closeBtn = createCloseButton(sortDropdown)
 
-    // Función para mostrar el ordenador - Modificada para corregir el scroll
     const showSort = () => {
-      // Ocultar el otro dropdown si está abierto
       if (filterDropdown && filterDropdown.classList.contains("show")) {
         filterDropdown.classList.remove("show")
         filterBtn.classList.remove("active")
       }
 
-      // Posicionar correctamente el dropdown en escritorio
       if (window.innerWidth > 768) {
         const btnRect = sortBtn.getBoundingClientRect()
         sortDropdown.style.top = `${btnRect.bottom + window.scrollY}px`
         sortDropdown.style.right = `${window.innerWidth - btnRect.right}px`
 
-        // Asegurar que el dropdown no cause scroll
         const viewportHeight = window.innerHeight
         const dropdownHeight = sortDropdown.offsetHeight
         const dropdownBottom = btnRect.bottom + dropdownHeight
 
         if (dropdownBottom > viewportHeight) {
-          // Si el dropdown se sale de la pantalla, ajustar su posición
           sortDropdown.style.top = `${btnRect.top - dropdownHeight + window.scrollY}px`
         }
       }
@@ -395,20 +322,17 @@ document.addEventListener("DOMContentLoaded", () => {
       filterOverlay.classList.add("show")
       sortBtn.classList.add("active")
 
-      // Marcar las opciones activas
       updateActiveFilterOptions()
     }
 
-    // Función para ocultar el ordenador
     const hideSort = () => {
       sortDropdown.classList.remove("show")
       filterOverlay.classList.remove("show")
       sortBtn.classList.remove("active")
     }
 
-    // Evento para mostrar el ordenador
     sortBtn.addEventListener("click", (e) => {
-      e.stopPropagation() // Evitar que el clic se propague al documento
+      e.stopPropagation()
       if (sortDropdown.classList.contains("show")) {
         hideSort()
       } else {
@@ -416,10 +340,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     })
 
-    // Evento para cerrar con el botón de cierre
     closeBtn.addEventListener("click", hideSort)
 
-    // Manejar clics en las opciones de ordenación
     const sortOptions = sortDropdown.querySelectorAll(".filter-option")
     sortOptions.forEach((option) => {
       option.addEventListener("click", () => {
@@ -429,7 +351,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (filterType === "sort") {
           activeSort = filterValue
 
-          // Actualizar el icono del botón según la ordenación
           const sortIcon = sortBtn.querySelector("i")
           if (filterValue.includes("asc")) {
             sortIcon.className = "fas fa-sort-amount-down"
@@ -437,17 +358,12 @@ document.addEventListener("DOMContentLoaded", () => {
             sortIcon.className = "fas fa-sort-amount-up"
           }
 
-          // Siempre mantener el botón de ordenar como activo
           sortBtn.classList.add("active")
         }
 
-        // Aplicar filtros
         filterItems()
-
-        // Actualizar opciones activas
         updateActiveFilterOptions()
 
-        // Cerrar el menú después de seleccionar
         setTimeout(() => {
           hideSort()
         }, 200)
@@ -457,7 +373,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Evento para cerrar con el overlay
   filterOverlay.addEventListener("click", () => {
-    // Ocultar ambos dropdowns
     if (filterDropdown) filterDropdown.classList.remove("show")
     if (sortDropdown) sortDropdown.classList.remove("show")
     filterOverlay.classList.remove("show")
@@ -483,7 +398,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Ajustar posición de los dropdowns al cambiar el tamaño de la ventana
   window.addEventListener("resize", () => {
-    // Solo reposicionar si están abiertos y estamos en escritorio
     if (window.innerWidth > 768) {
       if (filterDropdown && filterDropdown.classList.contains("show") && filterBtn) {
         const btnRect = filterBtn.getBoundingClientRect()
@@ -501,16 +415,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Función para marcar las opciones de filtro activas
   function updateActiveFilterOptions() {
-    // Actualizar opciones de filtro
     const filterOptions = document.querySelectorAll(".filter-option")
     filterOptions.forEach((option) => {
       const filterType = option.getAttribute("data-filter")
       const filterValue = option.getAttribute("data-value")
 
-      // Quitar la clase activa de todas las opciones
       option.classList.remove("active")
 
-      // Añadir la clase activa a las opciones seleccionadas
       if (
         (filterType === "sort" && filterValue === activeSort) ||
         (filterType === "type" && filterValue === activeTypeFilter)
@@ -520,7 +431,7 @@ document.addEventListener("DOMContentLoaded", () => {
     })
   }
 
-  // Función para filtrar y ordenar elementos
+  // Función para filtrar y ordenar elementos - SOLO PDFs Y CARPETAS
   function filterItems() {
     const searchTerm = searchInput ? searchInput.value.toLowerCase() : ""
     const unifiedList = document.getElementById("unified-list")
@@ -529,7 +440,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const items = Array.from(unifiedList.querySelectorAll(".folder-item, .file-item"))
       let visibleItems = 0
 
-      // Filtrar por término de búsqueda, tipo y fecha
       items.forEach((item) => {
         const itemName = item.querySelector(".folder-name, .file-name").textContent.toLowerCase()
         const itemType = item.getAttribute("data-type") || ""
@@ -540,45 +450,38 @@ document.addEventListener("DOMContentLoaded", () => {
         if (item.classList.contains("file-item") && item.querySelector(".file-date")) {
           itemDate = item.querySelector(".file-date").textContent
         } else {
-          // Para carpetas, intentar obtener la fecha de modificación
           itemDate = item.getAttribute("data-modified") || ""
         }
 
-        // Convertir la fecha del elemento a formato YYYY-MM-DD para comparar con el filtro
+        // Convertir la fecha del elemento a formato YYYY-MM-DD
         let itemDateFormatted = ""
         if (itemDate) {
           const dateParts = itemDate.split(" ")[0].split("/")
           if (dateParts.length === 3) {
-            // Formato original: DD/MM/YYYY
             itemDateFormatted = `${dateParts[2]}-${dateParts[1].padStart(2, "0")}-${dateParts[0].padStart(2, "0")}`
           }
         }
 
-        // Verificar si el elemento coincide con el término de búsqueda
+        // Verificar coincidencias
         const matchesSearch = itemName.includes(searchTerm)
 
-        // Verificar si el elemento coincide con el filtro de tipo
+        // Filtro de tipo simplificado - solo carpetas y PDFs
         let matchesTypeFilter = true
         if (activeTypeFilter !== "all") {
           if (activeTypeFilter === "folder") {
-            // Filtrar solo carpetas
             matchesTypeFilter = itemType === "folder"
-          } else if (activeTypeFilter === "file") {
-            // Filtrar solo archivos
-            matchesTypeFilter = itemType === "file"
-          } else {
-            // Filtrar por extensión específica
-            matchesTypeFilter = itemExtension === activeTypeFilter
+          } else if (activeTypeFilter === "pdf") {
+            matchesTypeFilter = itemExtension === "pdf"
           }
         }
 
-        // Verificar si el elemento coincide con el filtro de fecha
+        // Filtro de fecha
         let matchesDateFilter = true
         if (activeDateFilter && itemDateFormatted) {
           matchesDateFilter = itemDateFormatted === activeDateFilter
         }
 
-        // Mostrar u ocultar el elemento según los filtros
+        // Mostrar u ocultar elemento
         if (matchesSearch && matchesTypeFilter && matchesDateFilter) {
           item.style.display = ""
           visibleItems++
@@ -604,43 +507,37 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Función para ordenar elementos
   function sortItems(items, sortOrder) {
-    // Filtrar solo los elementos visibles
     const visibleItems = items.filter((item) => item.style.display !== "none")
 
-    // Ordenar según el criterio seleccionado
     visibleItems.sort((a, b) => {
       const nameA = a.getAttribute("data-name").toLowerCase()
       const nameB = b.getAttribute("data-name").toLowerCase()
 
-      // Obtener fechas para ordenación por fecha
+      // Obtener fechas para ordenación
       let dateA, dateB
       if (a.classList.contains("file-item") && a.querySelector(".file-date")) {
         dateA = a.querySelector(".file-date").textContent
       } else {
-        // Para carpetas en la página principal, intentar obtener la fecha de modificación
         const folderCount = a.querySelector(".folder-count")
         if (folderCount) {
-          // Intentar extraer la fecha de los atributos de datos
           dateA = a.getAttribute("data-modified") || "01/01/2000 00:00"
         } else {
-          dateA = "01/01/2000 00:00" // Fecha por defecto para carpetas
+          dateA = "01/01/2000 00:00"
         }
       }
 
       if (b.classList.contains("file-item") && b.querySelector(".file-date")) {
         dateB = b.querySelector(".file-date").textContent
       } else {
-        // Para carpetas en la página principal, intentar obtener la fecha de modificación
         const folderCount = b.querySelector(".folder-count")
         if (folderCount) {
-          // Intentar extraer la fecha de los atributos de datos
           dateB = b.getAttribute("data-modified") || "01/01/2000 00:00"
         } else {
-          dateB = "01/01/2000 00:00" // Fecha por defecto para carpetas
+          dateB = "01/01/2000 00:00"
         }
       }
 
-      // Convertir fechas a objetos Date para comparación
+      // Convertir fechas a objetos Date
       const dateParts1 = dateA.split(" ")[0].split("/")
       const timeParts1 = dateA.split(" ")[1] ? dateA.split(" ")[1].split(":") : ["00", "00"]
       const dateObj1 = new Date(
@@ -666,15 +563,15 @@ document.addEventListener("DOMContentLoaded", () => {
       } else if (sortOrder === "name-desc") {
         return nameB.localeCompare(nameA)
       } else if (sortOrder === "date-desc") {
-        return dateObj2 - dateObj1 // Más reciente primero
+        return dateObj2 - dateObj1
       } else if (sortOrder === "date-asc") {
-        return dateObj1 - dateObj2 // Más antiguo primero
+        return dateObj1 - dateObj2
       }
 
       return 0
     })
 
-    // Reordenar los elementos en el DOM
+    // Reordenar elementos en el DOM
     const parent = items[0].parentNode
     visibleItems.forEach((item) => {
       parent.appendChild(item)
@@ -684,15 +581,13 @@ document.addEventListener("DOMContentLoaded", () => {
   // Inicializar filtros al cargar
   updateActiveFilterOptions()
 
-  // Añadir función para corregir el scroll al cargar la página
+  // Función para corregir el scroll al cargar la página
   function fixInitialScroll() {
-    // Forzar un reflow para corregir el scroll inicial
     document.body.style.overflow = "hidden"
     setTimeout(() => {
       document.body.style.overflow = ""
     }, 10)
   }
 
-  // Ejecutar la función para corregir el scroll al cargar la página
   fixInitialScroll()
 })

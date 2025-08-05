@@ -21,18 +21,15 @@ if (!file_exists($folder_path) || !is_dir($folder_path) || strpos(realpath($fold
 
 // Función para contar archivos y subcarpetas
 function countContents($dir) {
-    $files = count(array_filter(glob("$dir/*"), 'is_file'));
+    // Solo contar archivos PDF
+    $files = count(array_filter(glob("$dir/*.pdf"), 'is_file'));
     $subdirs = count(array_filter(glob("$dir/*"), 'is_dir'));
     return ['files' => $files, 'subdirs' => $subdirs];
 }
 
-// Obtener todos los archivos y subcarpetas
-$all_files = array_filter(glob($folder_path . '/*'), 'is_file');
-$files = array_filter($all_files, function($file) {
-    return strtolower(pathinfo($file, PATHINFO_EXTENSION)) === 'pdf';
-});
+// Obtener solo archivos PDF
+$files = array_filter(glob($folder_path . '/*.pdf'), 'is_file');
 $subdirs = array_filter(glob($folder_path . '/*'), 'is_dir');
-
 
 // Determinar si la carpeta está completamente vacía
 $is_empty = empty($files) && empty($subdirs);
@@ -53,16 +50,6 @@ if (count($path_parts) > 1) {
     // Si estamos en el primer nivel, volver al índice
     $parent_url = 'index.php';
 }
-
-// Obtener todas las extensiones únicas para el filtro
-$extensions = [];
-foreach ($files as $file) {
-    $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
-    if (!empty($ext) && !in_array($ext, $extensions)) {
-        $extensions[] = $ext;
-    }
-}
-sort($extensions); // Ordenar alfabéticamente
 ?>
 
 <!DOCTYPE html>
@@ -83,7 +70,6 @@ sort($extensions); // Ordenar alfabéticamente
         <div class="container">
             <h1><?php echo $title; ?></h1>
             <div class="header-icons">
-                <button id="view-toggle" class="view-toggle" title="Cambiar vista"><i class="fas fa-list"></i></button>
                 <button id="refresh-btn" title="Actualizar"><i class="fas fa-sync-alt"></i></button>
                 <button id="theme-toggle" title="Cambiar tema"><i class="fas fa-moon"></i></button>
             </div>
@@ -145,11 +131,11 @@ sort($extensions); // Ordenar alfabéticamente
                                     <i class="fas fa-folder"></i> Carpetas
                                 </div>
                                 <?php endif; ?>
-                                <?php foreach ($extensions as $ext): ?>
-                                    <div class="filter-option" data-filter="type" data-value="<?php echo $ext; ?>">
-                                        <i class="<?php echo getFileIconClass($ext); ?>"></i> .<?php echo strtoupper($ext); ?>
-                                    </div>
-                                <?php endforeach; ?>
+                                <?php if (!empty($files)): ?>
+                                <div class="filter-option" data-filter="type" data-value="pdf">
+                                    <i class="fas fa-file-pdf"></i> PDFs
+                                </div>
+                                <?php endif; ?>
                             </div>
                         </div>
                         <div class="filter-section">
@@ -173,24 +159,18 @@ sort($extensions); // Ordenar alfabéticamente
             <?php else: ?>
                 <div id="content-container">
                     <div class="unified-container" id="unified-list">
-                        <div class="table-header">
-                            <div class="header-icon"></div>
-                            <div class="header-name">Nombre</div>
-                            <div class="header-info">Información</div>
-                        </div>
-                        
-                        <!-- Modificar la sección de subcarpetas para incluir la fecha y el botón de información -->
+                        <!-- Subcarpetas -->
                         <?php if (!empty($subdirs)): ?>
                             <?php foreach ($subdirs as $subdir): ?>
                                 <?php 
                                 $subdir_name = basename($subdir);
-                                // Contar archivos y subcarpetas dentro de esta subcarpeta
+                                // Contar archivos PDF y subcarpetas
                                 $contents = countContents($subdir);
                                 $file_count = $contents['files'];
                                 $subdir_count = $contents['subdirs'];
                                 // URL con parámetro directo
                                 $subdir_url = 'folder.php?path=' . urlencode($folder_path_param . '/' . $subdir_name);
-                                // Obtener fecha de modificación para ordenar
+                                // Obtener fecha de modificación
                                 $subdir_modified = filemtime($subdir);
                                 $subdir_modified_str = date('d/m/Y H:i', $subdir_modified);
                                 ?>
@@ -200,13 +180,10 @@ sort($extensions); // Ordenar alfabéticamente
                                     </div>
                                     <div class="folder-name"><?php echo $subdir_name; ?></div>
                                     <div class="folder-count">
-                                        <?php echo $file_count; ?> archivo<?php echo $file_count != 1 ? 's' : ''; ?>
+                                        <?php echo $file_count; ?> PDF<?php echo $file_count != 1 ? 's' : ''; ?>
                                         <?php if ($subdir_count > 0): ?>
                                             - <?php echo $subdir_count; ?> subcarpeta<?php echo $subdir_count != 1 ? 's' : ''; ?>
                                         <?php endif; ?>
-                                    </div>
-                                    <div class="folder-date">
-                                        <i class="fas fa-clock"></i> <?php echo $subdir_modified_str; ?>
                                     </div>
                                     <div class="info-button" data-info-type="folder" data-info-name="<?php echo htmlspecialchars($subdir_name); ?>" data-info-modified="<?php echo $subdir_modified_str; ?>" data-info-files="<?php echo $file_count; ?>" data-info-subdirs="<?php echo $subdir_count; ?>">
                                         <i class="fas fa-info"></i>
@@ -215,13 +192,11 @@ sort($extensions); // Ordenar alfabéticamente
                             <?php endforeach; ?>
                         <?php endif; ?>
                         
-                        <!-- Modificar la sección de archivos para incluir el botón de información -->
+                        <!-- Archivos PDF -->
                         <?php if (!empty($files)): ?>
                             <?php foreach ($files as $file): ?>
                                 <?php 
                                 $file_name = basename($file);
-                                $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
-                                $file_icon = getFileIcon($file_ext);
                                 $file_modified = filemtime($file);
                                 $file_modified_str = date('d/m/Y H:i', $file_modified);
                                 $file_size = filesize($file);
@@ -229,13 +204,13 @@ sort($extensions); // Ordenar alfabéticamente
                                 // URL con parámetro directo
                                 $file_url = 'viewer.php?file=' . urlencode($folder_path_param . '/' . $file_name);
                                 ?>
-                                <a href="<?php echo $file_url; ?>" class="file-item" title="<?php echo htmlspecialchars($file_name); ?>" data-name="<?php echo htmlspecialchars($file_name); ?>" data-type="file" data-extension="<?php echo $file_ext; ?>">
+                                <a href="<?php echo $file_url; ?>" class="file-item" title="<?php echo htmlspecialchars($file_name); ?>" data-name="<?php echo htmlspecialchars($file_name); ?>" data-type="file" data-extension="pdf">
                                     <div class="file-icon">
-                                        <i class="<?php echo $file_icon; ?>"></i>
+                                        <i class="fas fa-file-pdf"></i>
                                     </div>
                                     <div class="file-name"><?php echo $file_name; ?></div>
                                     <div class="file-date"><?php echo $file_modified_str; ?></div>
-                                    <div class="info-button" data-info-type="file" data-info-name="<?php echo htmlspecialchars($file_name); ?>" data-info-modified="<?php echo $file_modified_str; ?>" data-info-size="<?php echo $file_size_str; ?>" data-info-extension="<?php echo strtoupper($file_ext); ?>">
+                                    <div class="info-button" data-info-type="file" data-info-name="<?php echo htmlspecialchars($file_name); ?>" data-info-modified="<?php echo $file_modified_str; ?>" data-info-size="<?php echo $file_size_str; ?>" data-info-extension="PDF">
                                         <i class="fas fa-info"></i>
                                     </div>
                                 </a>
@@ -245,7 +220,7 @@ sort($extensions); // Ordenar alfabéticamente
                         <!-- Mensaje unificado para cuando no hay resultados -->
                         <div id="no-results-unified" class="no-results">
                             <i class="fas fa-search"></i>
-                            <p>No se encontraron archivos que coincidan con tu búsqueda</p>
+                            <p>No se encontraron elementos que coincidan con tu búsqueda</p>
                         </div>
                     </div>
                 </div>
@@ -276,28 +251,6 @@ sort($extensions); // Ordenar alfabéticamente
 </html>
 
 <?php
-// Modificar la función getFileIcon para cambiar los colores de los iconos
-function getFileIcon($extension) {
-    $extension = strtolower($extension);
-    
-    $icons = [
-        'pdf' => 'fas fa-file-pdf text-danger',
-    ];
-    
-    return isset($icons[$extension]) ? $icons[$extension] : 'fas fa-file';
-}
-
-// Función para obtener solo la clase del icono sin el color
-function getFileIconClass($extension) {
-    $extension = strtolower($extension);
-    
-    $icons = [
-        'pdf' => 'fas fa-file-pdf',
-    ];
-    
-    return isset($icons[$extension]) ? $icons[$extension] : 'fas fa-file';
-}
-
 // Función para formatear el tamaño del archivo
 function formatFileSize($bytes) {
     $units = ['B', 'KB', 'MB', 'GB', 'TB'];
