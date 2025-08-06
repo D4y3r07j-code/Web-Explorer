@@ -1,0 +1,43 @@
+# Logs y archivos temporales
+logs/
+*.log
+*.tmp
+*.temp
+
+# Configuraciones locales
+config/local-config.php
+config/database-config.php
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Directorios de archivos subidos
+campamentos/
+uploads/
+files/
+
+# Archivos de respaldo
+*.bak
+*.backup
+
+# Archivos de IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# Archivos de dependencias (si usas Composer en el futuro)
+vendor/
+composer.lock
+
+# Variables de entorno
+.env
+.env.local
+.env.production
+
+# Archivos de cache
+cache/
+tmp/

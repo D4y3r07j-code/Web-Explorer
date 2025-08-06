@@ -64,7 +64,7 @@ $back_url = 'folder.php?path=' . urlencode($folder_path);
     <main>
         <div class="container">
             <div class="navigation-bar">
-                <a href="../Web-Explorer/" class="nav-button"><i class="fas fa-home"></i> <span class="nav-text">Inicio</span></a>
+                <a href="index.php" class="nav-button"><i class="fas fa-home"></i> <span class="nav-text">Inicio</span></a>
                 <div class="file-name-display"><?php echo $file_name; ?></div>
                 <button id="close-viewer" class="close-button" onclick="window.location.href='<?php echo $back_url; ?>'"><i class="fas fa-times"></i></button>
             </div>

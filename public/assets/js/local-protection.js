@@ -1,7 +1,7 @@
 // Script para detectar y prevenir la visualización local de páginas guardadas
 ;(() => {
   // URL correcta a la que redirigir
-  const correctURL = "https://172.25.236.159/dashbord/"
+  const correctURL = "https://172.25.213.219/"
 
   // Función para verificar si la página se está ejecutando localmente
   function isRunningLocally() {

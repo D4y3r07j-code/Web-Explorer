@@ -1,32 +1,31 @@
 <?php
 /**
- * Sistema de registro de eventos de seguridad
- * Este archivo maneja el registro de intentos de violación de seguridad
+ * Sistema de registro de eventos de seguridad mejorado
+ * Maneja tanto logs de seguridad como logs de acceso
  */
 
-// Configuración
-$log_dir = './logs';
-$log_file = $log_dir . '/security_log.txt';
+// Configuración - logs fuera del directorio web
+$security_log_dir = '../logs/security';
+$access_log_dir = '../logs/access';
+$security_log_file = $security_log_dir . '/security_log.txt';
+$access_log_file = $access_log_dir . '/access_log.txt';
 
-// Crear directorio de logs si no existe
-if (!file_exists($log_dir)) {
-    mkdir($log_dir, 0755, true);
+// Crear directorios de logs si no existen
+if (!file_exists($security_log_dir)) {
+    mkdir($security_log_dir, 0755, true);
+}
+if (!file_exists($access_log_dir)) {
+    mkdir($access_log_dir, 0755, true);
 }
 
 /**
  * Registra un evento de seguridad en el archivo de log
- * 
- * @param string $action Acción que intentó realizar el usuario
- * @param int $level Nivel de seguridad aplicado (0-3)
- * @param int $attempts Número de intentos acumulados
- * @param int $blockDuration Duración del bloqueo en segundos (si aplica)
- * @return bool Éxito o fracaso al registrar
  */
 function logSecurityEvent($action, $level = -1, $attempts = 0, $blockDuration = 0) {
-    global $log_file;
+    global $security_log_file;
     
     // Obtener información del cliente
-    $ip = $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
+    $ip = getClientIP();
     $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown';
     $referer = $_SERVER['HTTP_REFERER'] ?? 'Direct access';
     $requestUri = $_SERVER['REQUEST_URI'] ?? 'Unknown';
@@ -37,6 +36,12 @@ function logSecurityEvent($action, $level = -1, $attempts = 0, $blockDuration = 
     // Determinar el tipo de navegador
     $browser = getBrowserInfo($userAgent);
     
+    // Formatear el nivel de seguridad
+    $levelText = "Warning";
+    if ($level >= 0) {
+        $levelText = "Nivel " . ($level + 1); // Convertir 0,1,2 a Nivel 1,2,3
+    }
+    
     // Formatear el mensaje de log
     $logMessage = sprintf(
         "[%s] IP: %s | Action: %s | Attempts: %d | Level: %s | Duration: %s | Browser: %s | URI: %s | Referer: %s\n",
@@ -44,7 +49,7 @@ function logSecurityEvent($action, $level = -1, $attempts = 0, $blockDuration = 
         $ip,
         $action,
         $attempts,
-        ($level >= 0) ? "Level $level" : "Warning",
+        $levelText,
         ($blockDuration > 0) ? formatBlockDuration($blockDuration) : "N/A",
         $browser,
         $requestUri,
@@ -52,14 +57,57 @@ function logSecurityEvent($action, $level = -1, $attempts = 0, $blockDuration = 
     );
     
     // Escribir en el archivo de log
-    return file_put_contents($log_file, $logMessage, FILE_APPEND | LOCK_EX) !== false;
+    $result = file_put_contents($security_log_file, $logMessage, FILE_APPEND | LOCK_EX);
+    
+    // Log adicional para debugging
+    error_log("Security Event Logged: $action, Level: $levelText, IP: $ip, Attempts: $attempts");
+    
+    return $result !== false;
+}
+
+/**
+ * Registra un acceso a PDF
+ */
+function logPDFAccess($pdfPath) {
+    global $access_log_file;
+    
+    $ip = getClientIP();
+    $date = date('Y-m-d H:i:s');
+    
+    $logMessage = sprintf(
+        "%s - PDF accedido: %s - IP: %s\n",
+        $date,
+        $pdfPath,
+        $ip
+    );
+    
+    return file_put_contents($access_log_file, $logMessage, FILE_APPEND | LOCK_EX) !== false;
+}
+
+/**
+ * Obtiene la IP real del cliente
+ */
+function getClientIP() {
+    $ip_keys = ['HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'HTTP_CLIENT_IP', 'REMOTE_ADDR'];
+    
+    foreach ($ip_keys as $key) {
+        if (!empty($_SERVER[$key])) {
+            $ip = $_SERVER[$key];
+            // Si hay múltiples IPs, tomar la primera
+            if (strpos($ip, ',') !== false) {
+                $ip = trim(explode(',', $ip)[0]);
+            }
+            if (filter_var($ip, FILTER_VALIDATE_IP)) {
+                return $ip;
+            }
+        }
+    }
+    
+    return $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
 }
 
 /**
  * Obtiene información del navegador a partir del User Agent
- * 
- * @param string $userAgent User Agent del cliente
- * @return string Información del navegador
  */
 function getBrowserInfo($userAgent) {
     if (strpos($userAgent, 'MSIE') !== false || strpos($userAgent, 'Trident') !== false) {
@@ -75,15 +123,12 @@ function getBrowserInfo($userAgent) {
     } elseif (strpos($userAgent, 'Opera') !== false || strpos($userAgent, 'OPR') !== false) {
         return 'Opera';
     } else {
-        return $userAgent;
+        return substr($userAgent, 0, 50) . '...';
     }
 }
 
 /**
  * Formatea la duración del bloqueo en un formato legible
- * 
- * @param int $seconds Duración en segundos
- * @return string Duración formateada
  */
 function formatBlockDuration($seconds) {
     if ($seconds < 60) {
@@ -102,16 +147,57 @@ function formatBlockDuration($seconds) {
  * Endpoint para recibir eventos de seguridad desde JavaScript
  */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    // Configurar headers para CORS si es necesario
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: POST');
+    header('Access-Control-Allow-Headers: Content-Type');
+    
     $action = $_POST['action'] ?? 'unknown';
     $level = isset($_POST['level']) ? intval($_POST['level']) : -1;
     $attempts = isset($_POST['attempts']) ? intval($_POST['attempts']) : 0;
     $blockDuration = isset($_POST['duration']) ? intval($_POST['duration']) : 0;
     
+    // Log para debugging
+    error_log("Received security event: Action=$action, Level=$level, Attempts=$attempts, Duration=$blockDuration");
+    
     $success = logSecurityEvent($action, $level, $attempts, $blockDuration);
     
     // Responder con JSON
     header('Content-Type: application/json');
+    echo json_encode([
+        'success' => $success,
+        'message' => $success ? 'Event logged successfully' : 'Failed to log event',
+        'debug' => [
+            'action' => $action,
+            'level' => $level,
+            'attempts' => $attempts,
+            'duration' => $blockDuration,
+            'ip' => getClientIP()
+        ]
+    ]);
+    exit;
+}
+
+// Si se llama directamente para registrar acceso a PDF
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['log_pdf'])) {
+    $pdfPath = $_GET['pdf_path'] ?? 'Unknown';
+    $success = logPDFAccess($pdfPath);
+    
+    header('Content-Type: application/json');
     echo json_encode(['success' => $success]);
+    exit;
+}
+
+// Endpoint para testing - eliminar en producción
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['test_security'])) {
+    $testSuccess = logSecurityEvent('test event', 2, 9, 1200);
+    header('Content-Type: application/json');
+    echo json_encode([
+        'success' => $testSuccess,
+        'message' => 'Test security event logged',
+        'file_exists' => file_exists($security_log_file),
+        'file_writable' => is_writable(dirname($security_log_file))
+    ]);
     exit;
 }
 ?>
