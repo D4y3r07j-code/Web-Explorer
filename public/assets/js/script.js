@@ -1,593 +1,704 @@
 document.addEventListener("DOMContentLoaded", () => {
-  // Configuración de la modal de información
-  const infoModal = document.getElementById("info-modal")
-  const infoModalContent = infoModal.querySelector(".info-modal-content")
-  const infoModalClose = infoModal.querySelector(".info-modal-close")
-  const infoModalBody = infoModal.querySelector(".info-modal-body")
-  const infoModalIcon = infoModal.querySelector(".info-modal-icon i")
-  const infoModalTitle = infoModal.querySelector(".info-modal-title")
+  // Configuración de niveles de seguridad - SOLO 3 NIVELES
+  const securityLevels = [
+    { actions: 3, timeout: 300000, name: "Nivel 1" },   // 5 minutos
+    { actions: 6, timeout: 600000, name: "Nivel 2" },   // 10 minutos  
+    { actions: 9, timeout: 1200000, name: "Nivel 3" },  // 20 minutos
+  ]
 
-  // Función para mostrar la modal de información
-  function showInfoModal(element) {
-    const infoType = element.getAttribute("data-info-type")
-    const infoName = element.getAttribute("data-info-name")
-    const infoModified = element.getAttribute("data-info-modified")
+  // Crear el contenedor para los mensajes de seguridad
+  const securityMessageContainer = document.createElement("div")
+  securityMessageContainer.id = "security-message-container"
+  document.body.appendChild(securityMessageContainer)
 
-    // Cambiar el icono y título según el tipo
-    if (infoType === "folder") {
-      infoModalIcon.className = "fas fa-folder"
-      infoModalTitle.textContent = "Información de carpeta"
+  // Variable para controlar el tiempo entre mensajes
+  let messageActive = false
 
-      const infoFiles = element.getAttribute("data-info-files")
-      const infoSubdirs = element.getAttribute("data-info-subdirs")
+  // Contador de acciones inválidas
+  let invalidActions = Number.parseInt(localStorage.getItem("invalidActions") || "0")
 
-      // Construir el contenido para carpetas
-      infoModalBody.innerHTML = `
-        <div class="info-item">
-          <div class="info-label">Nombre:</div>
-          <div class="info-value">${infoName}</div>
-        </div>
-        <div class="info-item">
-          <div class="info-label">Modificado:</div>
-          <div class="info-value">${infoModified}</div>
-        </div>
-        <div class="info-item">
-          <div class="info-label">Archivos:</div>
-          <div class="info-value">${infoFiles} archivo${infoFiles != 1 ? "s" : ""}</div>
-        </div>
-        <div class="info-item">
-          <div class="info-label">Subcarpetas:</div>
-          <div class="info-value">${infoSubdirs} subcarpeta${infoSubdirs != 1 ? "s" : ""}</div>
-        </div>
-      `
-    } else if (infoType === "file") {
-      const infoExtension = element.getAttribute("data-info-extension")
-      const infoSize = element.getAttribute("data-info-size")
+  // Nivel de bloqueo actual (0-based index)
+  let currentBlockLevel = Number.parseInt(localStorage.getItem("currentBlockLevel") || "-1")
 
-      // Solo PDF
-      infoModalIcon.className = "fas fa-file-pdf text-danger"
-      infoModalTitle.textContent = "Información de PDF"
+  // Lista de elementos críticos que no deben ser eliminados
+  const criticalElements = ["security-block-container"]
 
-      // Construir el contenido para archivos PDF
-      infoModalBody.innerHTML = `
-        <div class="info-item">
-          <div class="info-label">Nombre:</div>
-          <div class="info-value">${infoName}</div>
-        </div>
-        <div class="info-item">
-          <div class="info-label">Tipo:</div>
-          <div class="info-value">PDF</div>
-        </div>
-        <div class="info-item">
-          <div class="info-label">Tamaño:</div>
-          <div class="info-value">${infoSize}</div>
-        </div>
-        <div class="info-item">
-          <div class="info-label">Modificado:</div>
-          <div class="info-value">${infoModified}</div>
-        </div>
-      `
-    }
-
-    // Mostrar la modal
-    infoModal.classList.add("show")
-
-    // Prevenir que el clic se propague al elemento padre
-    event.preventDefault()
-    event.stopPropagation()
-  }
-
-  // Cerrar la modal al hacer clic en el botón de cierre
-  infoModalClose.addEventListener("click", () => {
-    infoModal.classList.remove("show")
-  })
-
-  // Cerrar la modal al hacer clic fuera del contenido
-  infoModal.addEventListener("click", (e) => {
-    if (e.target === infoModal) {
-      infoModal.classList.remove("show")
+  // Añadir atributos de seguridad a elementos críticos
+  criticalElements.forEach((id) => {
+    const element = document.getElementById(id)
+    if (element) {
+      element.setAttribute("data-security", "protected")
     }
   })
 
-  // Añadir eventos a los botones de información
-  document.addEventListener("click", (e) => {
-    if (e.target.closest(".info-button")) {
-      const infoButton = e.target.closest(".info-button")
-      showInfoModal(infoButton)
-    }
-  })
+  // Variable para detectar si las herramientas de desarrollador están abiertas
+  let devToolsOpen = false
 
-  // Búsqueda en tiempo real
-  const searchInput = document.getElementById("search-input")
-  if (searchInput) {
-    searchInput.addEventListener("input", () => {
-      filterItems()
-    })
-  }
+  // Verificar si hay un bloqueo activo al cargar la página
+  checkForActiveBlock()
 
-  // Cambio de tema
-  const themeToggle = document.getElementById("theme-toggle")
-  if (themeToggle) {
-    themeToggle.addEventListener("click", () => {
-      window.toggleTheme()
-    })
-  }
-
-  // Botón de actualizar
-  const refreshBtn = document.getElementById("refresh-btn")
-  if (refreshBtn) {
-    refreshBtn.addEventListener("click", () => {
-      const icon = refreshBtn.querySelector("i")
-      icon.classList.add("fa-spin")
-
-      setTimeout(() => {
-        location.reload()
-      }, 300)
-    })
-  }
-
-  // Eliminar el cambio de vista ya que solo usamos modo tarjeta
-  // El botón de vista se mantiene oculto en el CSS
-
-  // Corregir el comportamiento del botón volver en el visor
-  const volverBtn = document.querySelector('.nav-button[href="javascript:history.back()"]')
-  if (volverBtn) {
-    volverBtn.addEventListener("click", (e) => {
-      e.preventDefault()
-      history.back()
-    })
-  }
-
-  // Variables para almacenar los filtros activos
-  let activeSort = "name-asc" // Ordenación predeterminada: A-Z
-  let activeTypeFilter = "all" // Filtro de tipo predeterminado: todos
-  let activeDateFilter = null // Filtro de fecha predeterminado: ninguno
-
-  // Filtro y ordenación - NUEVA IMPLEMENTACIÓN CON BOTONES SEPARADOS
-  const filterBtn = document.getElementById("filter-btn")
-  const filterDropdown = document.getElementById("filter-dropdown")
-  const sortBtn = document.getElementById("sort-btn")
-  const sortDropdown = document.getElementById("sort-dropdown")
-
-  // Crear overlay para el fondo en móvil (compartido entre ambos dropdowns)
-  const filterOverlay = document.createElement("div")
-  filterOverlay.className = "filter-overlay"
-  document.body.appendChild(filterOverlay)
-
-  // Función para crear botón de cierre para modales
-  function createCloseButton(dropdown) {
-    const closeBtn = document.createElement("button")
-    closeBtn.className = "filter-close-btn"
-    closeBtn.innerHTML = '<i class="fas fa-times"></i>'
-    closeBtn.setAttribute("aria-label", "Cerrar")
-
-    if (dropdown.firstChild) {
-      dropdown.insertBefore(closeBtn, dropdown.firstChild)
-    } else {
-      dropdown.appendChild(closeBtn)
+  // Función para mostrar mensajes de seguridad
+  function showSecurityMessage(message) {
+    // Si hay un bloqueo activo, no mostrar mensajes adicionales
+    if (document.getElementById("security-block-container")) {
+      return
     }
 
-    return closeBtn
-  }
-
-  // Configurar el dropdown de filtro
-  if (filterBtn && filterDropdown) {
-    const closeBtn = createCloseButton(filterDropdown)
-
-    const showFilter = () => {
-      if (sortDropdown && sortDropdown.classList.contains("show")) {
-        sortDropdown.classList.remove("show")
-        sortBtn.classList.remove("active")
-      }
-
-      if (window.innerWidth > 768) {
-        const btnRect = filterBtn.getBoundingClientRect()
-        filterDropdown.style.top = `${btnRect.bottom + window.scrollY}px`
-        filterDropdown.style.right = `${window.innerWidth - btnRect.right}px`
-
-        const viewportHeight = window.innerHeight
-        const dropdownHeight = filterDropdown.offsetHeight
-        const dropdownBottom = btnRect.bottom + dropdownHeight
-
-        if (dropdownBottom > viewportHeight) {
-          filterDropdown.style.top = `${btnRect.top - dropdownHeight + window.scrollY}px`
-        }
-      }
-
-      filterDropdown.classList.add("show")
-      filterOverlay.classList.add("show")
-      filterBtn.classList.add("active")
-
-      updateActiveFilterOptions()
-    }
-
-    const hideFilter = () => {
-      filterDropdown.classList.remove("show")
-      filterOverlay.classList.remove("show")
-      filterBtn.classList.remove("active")
-    }
-
-    filterBtn.addEventListener("click", (e) => {
-      e.stopPropagation()
-      if (filterDropdown.classList.contains("show")) {
-        hideFilter()
-      } else {
-        showFilter()
-      }
-    })
-
-    closeBtn.addEventListener("click", hideFilter)
-
-    const filterOptions = filterDropdown.querySelectorAll(".filter-option")
-    filterOptions.forEach((option) => {
-      option.addEventListener("click", () => {
-        const filterType = option.getAttribute("data-filter")
-        const filterValue = option.getAttribute("data-value")
-
-        if (filterType === "type") {
-          activeTypeFilter = filterValue
-
-          if (filterValue === "all") {
-            filterBtn.classList.remove("active")
-          } else {
-            filterBtn.classList.add("active")
-          }
-        }
-
-        filterItems()
-        updateActiveFilterOptions()
-
+    // Si ya hay un mensaje activo, eliminar el anterior
+    if (messageActive) {
+      const oldMessages = document.querySelectorAll(".security-message")
+      oldMessages.forEach((msg) => {
+        msg.classList.add("hide")
         setTimeout(() => {
-          hideFilter()
-        }, 200)
+          if (msg.parentNode === securityMessageContainer) {
+            securityMessageContainer.removeChild(msg)
+          }
+        }, 300)
       })
-    })
-  }
-
-  // Configurar los botones de filtro por fecha
-  const dateFilterInput = document.getElementById("date-filter")
-  const applyDateFilterBtn = document.getElementById("apply-date-filter")
-  const clearDateFilterBtn = document.getElementById("clear-date-filter")
-
-  if (applyDateFilterBtn) {
-    applyDateFilterBtn.addEventListener("click", () => {
-      if (dateFilterInput && dateFilterInput.value) {
-        activeDateFilter = dateFilterInput.value
-
-        if (filterBtn) {
-          filterBtn.classList.add("active")
-        }
-
-        filterItems()
-
-        setTimeout(() => {
-          if (filterDropdown) {
-            filterDropdown.classList.remove("show")
-            filterOverlay.classList.remove("show")
-            if (filterBtn) filterBtn.classList.remove("active")
-          }
-        }, 200)
-      }
-    })
-  }
-
-  if (clearDateFilterBtn) {
-    clearDateFilterBtn.addEventListener("click", () => {
-      if (dateFilterInput) {
-        dateFilterInput.value = ""
-        activeDateFilter = null
-
-        if (filterBtn && activeTypeFilter === "all") {
-          filterBtn.classList.remove("active")
-        }
-
-        filterItems()
-
-        setTimeout(() => {
-          if (filterDropdown) {
-            filterDropdown.classList.remove("show")
-            filterOverlay.classList.remove("show")
-            if (filterBtn) filterBtn.classList.remove("active")
-          }
-        }, 200)
-      }
-    })
-  }
-
-  // Configurar el dropdown de ordenación
-  if (sortBtn && sortDropdown) {
-    const closeBtn = createCloseButton(sortDropdown)
-
-    const showSort = () => {
-      if (filterDropdown && filterDropdown.classList.contains("show")) {
-        filterDropdown.classList.remove("show")
-        filterBtn.classList.remove("active")
-      }
-
-      if (window.innerWidth > 768) {
-        const btnRect = sortBtn.getBoundingClientRect()
-        sortDropdown.style.top = `${btnRect.bottom + window.scrollY}px`
-        sortDropdown.style.right = `${window.innerWidth - btnRect.right}px`
-
-        const viewportHeight = window.innerHeight
-        const dropdownHeight = sortDropdown.offsetHeight
-        const dropdownBottom = btnRect.bottom + dropdownHeight
-
-        if (dropdownBottom > viewportHeight) {
-          sortDropdown.style.top = `${btnRect.top - dropdownHeight + window.scrollY}px`
-        }
-      }
-
-      sortDropdown.classList.add("show")
-      filterOverlay.classList.add("show")
-      sortBtn.classList.add("active")
-
-      updateActiveFilterOptions()
     }
 
-    const hideSort = () => {
-      sortDropdown.classList.remove("show")
-      filterOverlay.classList.remove("show")
-      sortBtn.classList.remove("active")
-    }
+    messageActive = true
 
-    sortBtn.addEventListener("click", (e) => {
-      e.stopPropagation()
-      if (sortDropdown.classList.contains("show")) {
-        hideSort()
-      } else {
-        showSort()
-      }
-    })
+    const messageElement = document.createElement("div")
+    messageElement.className = "security-message"
 
-    closeBtn.addEventListener("click", hideSort)
+    // Determinar el próximo nivel de bloqueo
+    let nextLevelIndex = 0
+    let attemptsUntilBlock = 0
 
-    const sortOptions = sortDropdown.querySelectorAll(".filter-option")
-    sortOptions.forEach((option) => {
-      option.addEventListener("click", () => {
-        const filterType = option.getAttribute("data-filter")
-        const filterValue = option.getAttribute("data-value")
-
-        if (filterType === "sort") {
-          activeSort = filterValue
-
-          const sortIcon = sortBtn.querySelector("i")
-          if (filterValue.includes("asc")) {
-            sortIcon.className = "fas fa-sort-amount-down"
-          } else {
-            sortIcon.className = "fas fa-sort-amount-up"
-          }
-
-          sortBtn.classList.add("active")
-        }
-
-        filterItems()
-        updateActiveFilterOptions()
-
-        setTimeout(() => {
-          hideSort()
-        }, 200)
-      })
-    })
-  }
-
-  // Evento para cerrar con el overlay
-  filterOverlay.addEventListener("click", () => {
-    if (filterDropdown) filterDropdown.classList.remove("show")
-    if (sortDropdown) sortDropdown.classList.remove("show")
-    filterOverlay.classList.remove("show")
-    if (filterBtn) filterBtn.classList.remove("active")
-    if (sortBtn) sortBtn.classList.remove("active")
-  })
-
-  // Cerrar los menús al hacer clic fuera de ellos (para escritorio)
-  document.addEventListener("click", (e) => {
-    if (
-      !e.target.closest(".filter-button") &&
-      !e.target.closest(".filter-dropdown") &&
-      !e.target.closest(".sort-button") &&
-      !e.target.closest(".sort-dropdown")
-    ) {
-      if (filterDropdown) filterDropdown.classList.remove("show")
-      if (sortDropdown) sortDropdown.classList.remove("show")
-      filterOverlay.classList.remove("show")
-      if (filterBtn) filterBtn.classList.remove("active")
-      if (sortBtn) sortBtn.classList.remove("active")
-    }
-  })
-
-  // Ajustar posición de los dropdowns al cambiar el tamaño de la ventana
-  window.addEventListener("resize", () => {
-    if (window.innerWidth > 768) {
-      if (filterDropdown && filterDropdown.classList.contains("show") && filterBtn) {
-        const btnRect = filterBtn.getBoundingClientRect()
-        filterDropdown.style.top = `${btnRect.bottom + window.scrollY}px`
-        filterDropdown.style.right = `${window.innerWidth - btnRect.right}px`
-      }
-
-      if (sortDropdown && sortDropdown.classList.contains("show") && sortBtn) {
-        const btnRect = sortBtn.getBoundingClientRect()
-        sortDropdown.style.top = `${btnRect.bottom + window.scrollY}px`
-        sortDropdown.style.right = `${window.innerWidth - btnRect.right}px`
+    for (let i = 0; i < securityLevels.length; i++) {
+      if (invalidActions < securityLevels[i].actions) {
+        nextLevelIndex = i
+        attemptsUntilBlock = securityLevels[i].actions - invalidActions
+        break
       }
     }
-  })
 
-  // Función para marcar las opciones de filtro activas
-  function updateActiveFilterOptions() {
-    const filterOptions = document.querySelectorAll(".filter-option")
-    filterOptions.forEach((option) => {
-      const filterType = option.getAttribute("data-filter")
-      const filterValue = option.getAttribute("data-value")
-
-      option.classList.remove("active")
-
-      if (
-        (filterType === "sort" && filterValue === activeSort) ||
-        (filterType === "type" && filterValue === activeTypeFilter)
-      ) {
-        option.classList.add("active")
-      }
-    })
-  }
-
-  // Función para filtrar y ordenar elementos - SOLO PDFs Y CARPETAS
-  function filterItems() {
-    const searchTerm = searchInput ? searchInput.value.toLowerCase() : ""
-    const unifiedList = document.getElementById("unified-list")
-
-    if (unifiedList) {
-      const items = Array.from(unifiedList.querySelectorAll(".folder-item, .file-item"))
-      let visibleItems = 0
-
-      items.forEach((item) => {
-        const itemName = item.querySelector(".folder-name, .file-name").textContent.toLowerCase()
-        const itemType = item.getAttribute("data-type") || ""
-        const itemExtension = item.getAttribute("data-extension") || ""
-
-        // Obtener la fecha del elemento
-        let itemDate = ""
-        if (item.classList.contains("file-item") && item.querySelector(".file-date")) {
-          itemDate = item.querySelector(".file-date").textContent
-        } else {
-          itemDate = item.getAttribute("data-modified") || ""
-        }
-
-        // Convertir la fecha del elemento a formato YYYY-MM-DD
-        let itemDateFormatted = ""
-        if (itemDate) {
-          const dateParts = itemDate.split(" ")[0].split("/")
-          if (dateParts.length === 3) {
-            itemDateFormatted = `${dateParts[2]}-${dateParts[1].padStart(2, "0")}-${dateParts[0].padStart(2, "0")}`
-          }
-        }
-
-        // Verificar coincidencias
-        const matchesSearch = itemName.includes(searchTerm)
-
-        // Filtro de tipo simplificado - solo carpetas y PDFs
-        let matchesTypeFilter = true
-        if (activeTypeFilter !== "all") {
-          if (activeTypeFilter === "folder") {
-            matchesTypeFilter = itemType === "folder"
-          } else if (activeTypeFilter === "pdf") {
-            matchesTypeFilter = itemExtension === "pdf"
-          }
-        }
-
-        // Filtro de fecha
-        let matchesDateFilter = true
-        if (activeDateFilter && itemDateFormatted) {
-          matchesDateFilter = itemDateFormatted === activeDateFilter
-        }
-
-        // Mostrar u ocultar elemento
-        if (matchesSearch && matchesTypeFilter && matchesDateFilter) {
-          item.style.display = ""
-          visibleItems++
-        } else {
-          item.style.display = "none"
-        }
-      })
-
-      // Ordenar elementos visibles
-      sortItems(items, activeSort)
-
-      // Mostrar mensaje si no hay resultados
-      const noResultsUnified = document.getElementById("no-results-unified")
-      if (noResultsUnified) {
-        if (visibleItems === 0 && (searchTerm !== "" || activeTypeFilter !== "all" || activeDateFilter !== null)) {
-          noResultsUnified.classList.add("visible")
-        } else {
-          noResultsUnified.classList.remove("visible")
-        }
-      }
+    // Si ya estamos en el nivel máximo (Nivel 3), mostrar advertencia de bloqueo permanente
+    if (nextLevelIndex === 0 && invalidActions >= securityLevels[securityLevels.length - 1].actions) {
+      nextLevelIndex = securityLevels.length - 1
+      attemptsUntilBlock = 1 // Siempre 1 más para el bloqueo permanente
     }
-  }
 
-  // Función para ordenar elementos
-  function sortItems(items, sortOrder) {
-    const visibleItems = items.filter((item) => item.style.display !== "none")
+    const nextLevel = securityLevels[nextLevelIndex]
 
-    visibleItems.sort((a, b) => {
-      const nameA = a.getAttribute("data-name").toLowerCase()
-      const nameB = b.getAttribute("data-name").toLowerCase()
+    // Contenido del mensaje con información de seguridad
+    messageElement.innerHTML = `
+      <div class="message-content">
+        <i class="fas fa-exclamation-triangle security-icon"></i>
+        <span class="message-text">${message}</span>
+      </div>
+      <div class="security-info">
+        <div class="security-info-icon"><i class="fas fa-shield-alt"></i></div>
+        <div class="security-info-content">
+          <div class="security-info-title">Seguridad</div>
+          <div class="security-info-attempts">Intentos: ${invalidActions}</div>
+          <div class="security-info-warning">${invalidActions >= 9 ? "⚠️ PRÓXIMO: BLOQUEO PERMANENTE" : `Bloqueo en: ${attemptsUntilBlock} más`}</div>
+        </div>
+      </div>
+    `
 
-      // Obtener fechas para ordenación
-      let dateA, dateB
-      if (a.classList.contains("file-item") && a.querySelector(".file-date")) {
-        dateA = a.querySelector(".file-date").textContent
-      } else {
-        const folderCount = a.querySelector(".folder-count")
-        if (folderCount) {
-          dateA = a.getAttribute("data-modified") || "01/01/2000 00:00"
-        } else {
-          dateA = "01/01/2000 00:00"
-        }
-      }
+    // Añadir clase de gravedad según los intentos restantes
+    if (invalidActions >= 9) {
+      messageElement.classList.add("critical")
+    } else if (attemptsUntilBlock <= 1) {
+      messageElement.classList.add("critical")
+    } else if (attemptsUntilBlock <= 2) {
+      messageElement.classList.add("warning")
+    }
 
-      if (b.classList.contains("file-item") && b.querySelector(".file-date")) {
-        dateB = b.querySelector(".file-date").textContent
-      } else {
-        const folderCount = b.querySelector(".folder-count")
-        if (folderCount) {
-          dateB = b.getAttribute("data-modified") || "01/01/2000 00:00"
-        } else {
-          dateB = "01/01/2000 00:00"
-        }
-      }
+    // Añadir al contenedor
+    securityMessageContainer.appendChild(messageElement)
 
-      // Convertir fechas a objetos Date
-      const dateParts1 = dateA.split(" ")[0].split("/")
-      const timeParts1 = dateA.split(" ")[1] ? dateA.split(" ")[1].split(":") : ["00", "00"]
-      const dateObj1 = new Date(
-        Number.parseInt(dateParts1[2]),
-        Number.parseInt(dateParts1[1]) - 1,
-        Number.parseInt(dateParts1[0]),
-        Number.parseInt(timeParts1[0]),
-        Number.parseInt(timeParts1[1]),
-      )
-
-      const dateParts2 = dateB.split(" ")[0].split("/")
-      const timeParts2 = dateB.split(" ")[1] ? dateB.split(" ")[1].split(":") : ["00", "00"]
-      const dateObj2 = new Date(
-        Number.parseInt(dateParts2[2]),
-        Number.parseInt(dateParts2[1]) - 1,
-        Number.parseInt(dateParts2[0]),
-        Number.parseInt(timeParts2[0]),
-        Number.parseInt(timeParts2[1]),
-      )
-
-      if (sortOrder === "name-asc") {
-        return nameA.localeCompare(nameB)
-      } else if (sortOrder === "name-desc") {
-        return nameB.localeCompare(nameA)
-      } else if (sortOrder === "date-desc") {
-        return dateObj2 - dateObj1
-      } else if (sortOrder === "date-asc") {
-        return dateObj1 - dateObj2
-      }
-
-      return 0
-    })
-
-    // Reordenar elementos en el DOM
-    const parent = items[0].parentNode
-    visibleItems.forEach((item) => {
-      parent.appendChild(item)
-    })
-  }
-
-  // Inicializar filtros al cargar
-  updateActiveFilterOptions()
-
-  // Función para corregir el scroll al cargar la página
-  function fixInitialScroll() {
-    document.body.style.overflow = "hidden"
+    // Añadir clase para animación de entrada
     setTimeout(() => {
-      document.body.style.overflow = ""
+      messageElement.classList.add("show")
     }, 10)
+
+    // Eliminar después de 3 segundos
+    setTimeout(() => {
+      messageElement.classList.add("hide")
+      setTimeout(() => {
+        if (messageElement.parentNode === securityMessageContainer) {
+          securityMessageContainer.removeChild(messageElement)
+        }
+        messageActive = false
+      }, 500)
+    }, 3000)
   }
 
-  fixInitialScroll()
+  // Función para registrar una acción inválida
+  function registerInvalidAction(actionType) {
+    // Si hay un bloqueo activo, no procesar más acciones
+    if (document.getElementById("security-block-container")) {
+      return
+    }
+
+    invalidActions++
+    localStorage.setItem("invalidActions", invalidActions.toString())
+
+    console.log(`Security Event: ${actionType}, Attempts: ${invalidActions}`)
+
+    // Mostrar mensaje de advertencia
+    let messageText = ""
+
+    switch (actionType) {
+      case "menú contextual":
+        messageText = "El clic derecho está deshabilitado en esta página"
+        break
+      case "tecla F12":
+        messageText = "La tecla F12 está deshabilitada en esta página"
+        break
+      case "herramientas de desarrollador":
+        messageText = "Las herramientas de desarrollador están deshabilitadas"
+        break
+      case "consola de desarrollador":
+        messageText = "La consola de desarrollador está deshabilitada"
+        break
+      case "ver código fuente":
+        messageText = "Ver el código fuente está deshabilitado"
+        break
+      case "impresión":
+        messageText = "La impresión está deshabilitada en esta página"
+        break
+      case "arrastrar elementos":
+        messageText = "No se permite arrastrar elementos de esta página"
+        break
+      case "copiar contenido":
+        messageText = "No se permite copiar contenido de esta página"
+        break
+      case "guardar página":
+        messageText = "No se permite guardar esta página"
+        break
+      case "manipulación del bloqueo":
+        messageText = "Se ha detectado un intento de manipular el bloqueo de seguridad"
+        break
+      default:
+        messageText = `Acción no permitida: ${actionType}`
+    }
+
+    showSecurityMessage(messageText)
+
+    // Registrar el evento en el servidor INMEDIATAMENTE
+    logSecurityEvent(actionType, currentBlockLevel, invalidActions)
+
+    // Verificar si se debe aplicar un bloqueo temporal o permanente
+    checkSecurityLevel()
+  }
+
+  // Función para enviar el evento de seguridad al servidor
+  function logSecurityEvent(actionType, level = -1, attempts = 0, duration = 0) {
+    console.log(`Logging security event: ${actionType}, Level: ${level}, Attempts: ${attempts}`)
+    
+    // Crear los datos para enviar
+    const formData = new FormData()
+    formData.append("action", actionType)
+    formData.append("level", level)
+    formData.append("attempts", attempts)
+    formData.append("duration", duration)
+
+    // Enviar la solicitud al servidor (logs normales)
+    fetch("../src/security-logger.php", {
+      method: "POST",
+      body: formData,
+    })
+    .then(response => {
+      console.log(`Security log response status: ${response.status}`)
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`)
+      }
+      return response.json()
+    })
+    .then(data => {
+      console.log("Security event logged:", data)
+    })
+    .catch((error) => {
+      console.error("Error al registrar evento de seguridad:", error)
+      // Intentar con ruta alternativa
+      fetch("./src/security-logger.php", {
+        method: "POST",
+        body: formData,
+      })
+      .then(response => response.json())
+      .then(data => {
+        console.log("Security event logged (alternative path):", data)
+      })
+      .catch((error2) => {
+        console.error("Error con ruta alternativa:", error2)
+      })
+    })
+
+    // Si es un bloqueo aplicado o se alcanzaron 9 intentos, enviar al auto-blocker
+    if (actionType === "bloqueo aplicado" || attempts >= 9) {
+      const autoBlockData = new FormData()
+      autoBlockData.append("security_event", "true")
+      autoBlockData.append("action", actionType)
+      autoBlockData.append("level", level)
+      autoBlockData.append("attempts", attempts)
+
+      fetch("../src/security-auto-blocker.php", {
+        method: "POST",
+        body: autoBlockData,
+      })
+      .then(response => {
+        console.log(`Auto-blocker response status: ${response.status}`)
+        return response.json()
+      })
+      .then(data => {
+        console.log("Auto-blocker response:", data)
+        if (data.blocked) {
+          console.log("IP has been automatically blocked!")
+          // Mostrar mensaje de que la IP fue bloqueada y redirigir
+          showIPBlockedMessage()
+        }
+      })
+      .catch((error) => {
+        console.error("Error en auto-blocker:", error)
+        // Intentar con ruta alternativa
+        fetch("./src/security-auto-blocker.php", {
+          method: "POST",
+          body: autoBlockData,
+        })
+        .then(response => response.json())
+        .then(data => {
+          console.log("Auto-blocker response (alternative path):", data)
+          if (data.blocked) {
+            showIPBlockedMessage()
+          }
+        })
+        .catch((error2) => {
+          console.error("Error con ruta alternativa auto-blocker:", error2)
+        })
+      })
+    }
+  }
+
+  // Función para mostrar mensaje de IP bloqueada y redirigir
+  function showIPBlockedMessage() {
+    // Limpiar localStorage para evitar conflictos
+    localStorage.removeItem("invalidActions")
+    localStorage.removeItem("currentBlockLevel")
+    localStorage.removeItem("securityBlockLevel")
+    localStorage.removeItem("securityBlockEndTime")
+    
+    // Mostrar mensaje de bloqueo permanente
+    setTimeout(() => {
+      alert("🚨 ATENCIÓN: Tu dirección IP ha sido BLOQUEADA PERMANENTEMENTE por múltiples violaciones de seguridad.\n\n" +
+            "• Se registraron 9 o más intentos de acceso no autorizado\n" +
+            "• El bloqueo es permanente y solo puede ser removido por un administrador\n" +
+            "• Esta acción ha sido registrada en el sistema de seguridad\n\n" +
+            "Si consideras que esto es un error, contacta al administrador del sistema.")
+      
+      // Redirigir después de 3 segundos para mostrar la página de bloqueo
+      setTimeout(() => {
+        window.location.reload()
+      }, 3000)
+    }, 1000)
+  }
+
+  // Función para verificar el nivel de seguridad actual
+  function checkSecurityLevel() {
+    // Si se alcanzaron exactamente 9 intentos, activar bloqueo permanente
+    if (invalidActions >= 9) {
+      console.log(`Triggering permanent IP block after ${invalidActions} attempts`)
+      
+      // Registrar el evento de bloqueo permanente
+      logSecurityEvent("bloqueo permanente activado", 3, invalidActions, 0)
+      
+      // No aplicar bloqueo temporal, el servidor manejará el bloqueo permanente
+      return
+    }
+
+    // Verificar si debemos bloquear temporalmente en niveles 1, 2 o 3
+    for (let i = 0; i < securityLevels.length; i++) {
+      if (invalidActions === securityLevels[i].actions) {
+        // Exactamente el número de acciones para este nivel
+        currentBlockLevel = i
+        localStorage.setItem("currentBlockLevel", currentBlockLevel.toString())
+        console.log(`Applying temporary security block level ${i + 1}`)
+        applySecurityBlock(currentBlockLevel)
+        return
+      }
+    }
+  }
+
+  // Función para aplicar un bloqueo de seguridad temporal
+  function applySecurityBlock(levelIndex) {
+    const level = securityLevels[levelIndex]
+    const blockEndTime = Date.now() + level.timeout
+
+    console.log(`Security block applied: Level ${levelIndex + 1}, Duration: ${level.timeout}ms`)
+
+    // Guardar información del bloqueo en localStorage
+    localStorage.setItem("securityBlockLevel", levelIndex.toString())
+    localStorage.setItem("securityBlockEndTime", blockEndTime.toString())
+
+    // Registrar el bloqueo en el servidor
+    logSecurityEvent("bloqueo aplicado", levelIndex, invalidActions, Math.floor(level.timeout / 1000))
+
+    // Aplicar el bloqueo
+    showBlockScreen(levelIndex, blockEndTime)
+  }
+
+  // Función para mostrar la pantalla de bloqueo temporal
+  function showBlockScreen(levelIndex, endTime) {
+    // Crear el contenedor de bloqueo
+    const blockContainer = document.createElement("div")
+    blockContainer.id = "security-block-container"
+
+    const level = securityLevels[levelIndex]
+    const remainingTime = endTime - Date.now()
+    const minutes = Math.floor(remainingTime / 60000)
+    const seconds = Math.floor((remainingTime % 60000) / 1000)
+
+    // Formatear el tiempo como MM:SS
+    const formattedTime = `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
+
+    // Determinar información del próximo nivel o advertencia de bloqueo permanente
+    let nextLevelInfo = ""
+    if (invalidActions >= 9) {
+      nextLevelInfo = "⚠️ ADVERTENCIA: Has alcanzado el límite máximo. Tu IP será bloqueada permanentemente."
+    } else if (levelIndex < securityLevels.length - 1) {
+      const nextLevel = securityLevels[levelIndex + 1]
+      const actionsNeeded = nextLevel.actions - invalidActions
+      nextLevelInfo = `Próximo nivel: ${nextLevel.name} (${actionsNeeded} más)`
+    } else {
+      nextLevelInfo = "⚠️ ADVERTENCIA: El siguiente intento resultará en BLOQUEO PERMANENTE de tu IP"
+    }
+
+    // Contenido HTML para la pantalla de bloqueo
+    blockContainer.innerHTML = `
+      <div class="security-block-content">
+        <i class="fas fa-exclamation security-block-icon"></i>
+        <h2>Acceso Restringido</h2>
+        <div class="security-level-badge">${level.name}</div>
+        <p>Se ha detectado un intento de acceso no autorizado.</p>
+        <div class="security-attempts-info">
+          <div class="attempts-count">Intentos inválidos: ${invalidActions}</div>
+          <div class="next-level-info">${nextLevelInfo}</div>
+        </div>
+        <div class="security-timer-container">
+          <div class="security-timer-text">
+            La página se desbloqueará en: <span id="block-timer">${formattedTime}</span>
+          </div>
+          <div class="progress-container">
+            <div id="progress-bar" class="progress-bar"></div>
+          </div>
+        </div>
+      </div>
+    `
+
+    // Añadir al body y eliminar el contenido original
+    document.body.appendChild(blockContainer)
+
+    // Ocultar el contenido original
+    Array.from(document.body.children).forEach((child) => {
+      if (child !== blockContainer && child !== securityMessageContainer) {
+        child.style.display = "none"
+      }
+    })
+
+    // Iniciar el temporizador y la barra de progreso
+    startBlockTimer(endTime, level.timeout)
+
+    // Configurar el observador para detectar si alguien intenta eliminar el bloqueo
+    setupBlockScreenObserver(blockContainer)
+  }
+
+  // Función para configurar el observador del bloqueo
+  function setupBlockScreenObserver(blockContainer) {
+    // Crear un observador para detectar si se elimina el contenedor de bloqueo
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type === "childList" && mutation.removedNodes.length > 0) {
+          for (const removedNode of mutation.removedNodes) {
+            // Verificar si el nodo eliminado es el contenedor de bloqueo
+            if (removedNode === blockContainer) {
+              // Si alguien elimina el bloqueo, lo restauramos inmediatamente
+              // y registramos una acción inválida
+              document.body.appendChild(blockContainer)
+              registerInvalidAction("manipulación del bloqueo")
+              return
+            }
+          }
+        }
+      }
+    })
+
+    // Observar el documento para detectar si se elimina el contenedor de bloqueo
+    observer.observe(document.body, {
+      childList: true,
+      subtree: false,
+    })
+
+    // Guardar una referencia al observador
+    window._blockObserver = observer
+  }
+
+  // Función para iniciar el temporizador de bloqueo
+  function startBlockTimer(endTime, totalDuration) {
+    const timerElement = document.getElementById("block-timer")
+    const progressBar = document.getElementById("progress-bar")
+
+    const timerInterval = setInterval(() => {
+      const now = Date.now()
+      const remainingTime = endTime - now
+
+      if (remainingTime <= 0) {
+        // Fin del bloqueo
+        clearInterval(timerInterval)
+        removeBlockScreen()
+        return
+      }
+
+      // Actualizar el temporizador con formato MM:SS
+      const minutes = Math.floor(remainingTime / 60000)
+      const seconds = Math.floor((remainingTime % 60000) / 1000)
+      timerElement.textContent = `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
+
+      // Actualizar la barra de progreso
+      const progressPercentage = (remainingTime / totalDuration) * 100
+      progressBar.style.width = `${progressPercentage}%`
+    }, 1000)
+  }
+
+  // Función para eliminar la pantalla de bloqueo
+  function removeBlockScreen() {
+    const blockContainer = document.getElementById("security-block-container")
+    if (blockContainer) {
+      blockContainer.remove()
+    }
+
+    // Detener el observador del bloqueo si existe
+    if (window._blockObserver) {
+      window._blockObserver.disconnect()
+      window._blockObserver = null
+    }
+
+    // Mostrar el contenido original
+    Array.from(document.body.children).forEach((child) => {
+      child.style.display = ""
+    })
+
+    // Limpiar información de bloqueo
+    localStorage.removeItem("securityBlockLevel")
+    localStorage.removeItem("securityBlockEndTime")
+
+    // Registrar el desbloqueo en el servidor
+    logSecurityEvent("bloqueo finalizado", currentBlockLevel, invalidActions)
+  }
+
+  // Función para verificar si hay un bloqueo activo al cargar la página
+  function checkForActiveBlock() {
+    const blockLevelStr = localStorage.getItem("securityBlockLevel")
+    const blockEndTimeStr = localStorage.getItem("securityBlockEndTime")
+
+    if (blockLevelStr && blockEndTimeStr) {
+      const blockLevel = Number.parseInt(blockLevelStr)
+      const blockEndTime = Number.parseInt(blockEndTimeStr)
+      const now = Date.now()
+
+      if (now < blockEndTime) {
+        // Todavía hay un bloqueo activo
+        currentBlockLevel = blockLevel
+        showBlockScreen(blockLevel, blockEndTime)
+
+        // Registrar que se ha cargado la página con un bloqueo activo
+        logSecurityEvent(
+          "bloqueo activo al cargar",
+          blockLevel,
+          invalidActions,
+          Math.floor((blockEndTime - now) / 1000),
+        )
+      } else {
+        // El bloqueo ha expirado
+        localStorage.removeItem("securityBlockLevel")
+        localStorage.removeItem("securityBlockEndTime")
+      }
+    }
+  }
+
+  // Función para detectar si las herramientas de desarrollador están abiertas
+  function checkDevTools() {
+    const threshold = 160
+    const widthThreshold = window.outerWidth - window.innerWidth > threshold
+    const heightThreshold = window.outerHeight - window.innerHeight > threshold
+
+    // Actualizar el estado de las herramientas de desarrollador
+    devToolsOpen = widthThreshold || heightThreshold
+  }
+
+  // Verificar periódicamente si las herramientas de desarrollador están abiertas
+  setInterval(checkDevTools, 1000)
+
+  // 1. Bloquear clic derecho
+  document.addEventListener("contextmenu", (e) => {
+    e.preventDefault()
+    registerInvalidAction("menú contextual")
+    return false
+  })
+
+  // 2. Bloquear teclas de acceso a herramientas de desarrollador
+  document.addEventListener(
+    "keydown",
+    (e) => {
+      // F12
+      if (e.key === "F12") {
+        e.preventDefault()
+        registerInvalidAction("tecla F12")
+        return false
+      }
+
+      // Ctrl+Shift+I o Cmd+Option+I (Mac)
+      if ((e.ctrlKey && e.shiftKey && e.key === "I") || (e.metaKey && e.altKey && e.key === "i")) {
+        e.preventDefault()
+        registerInvalidAction("herramientas de desarrollador")
+        return false
+      }
+
+      // Ctrl+Shift+J o Cmd+Option+J (Mac) - Consola
+      if ((e.ctrlKey && e.shiftKey && e.key === "J") || (e.metaKey && e.altKey && e.key === "j")) {
+        e.preventDefault()
+        registerInvalidAction("consola de desarrollador")
+        return false
+      }
+
+      // Ctrl+U o Cmd+Option+U (Mac) - Ver código fuente
+      if ((e.ctrlKey && e.key === "u") || (e.metaKey && e.altKey && e.key === "u")) {
+        e.preventDefault()
+        registerInvalidAction("ver código fuente")
+        return false
+      }
+
+      // Ctrl+P o Cmd+P (Mac) - Imprimir
+      if ((e.ctrlKey && e.key === "p") || (e.metaKey && e.key === "p")) {
+        e.preventDefault()
+        e.stopPropagation()
+        registerInvalidAction("impresión")
+        return false
+      }
+    },
+    true,
+  )
+
+  // Bloqueo adicional para impresión
+  window.addEventListener(
+    "beforeprint",
+    (e) => {
+      registerInvalidAction("impresión")
+    },
+    true,
+  )
+
+  // 3. Detectar apertura de DevTools mediante cambio de tamaño de ventana
+  let devtoolsDetectionInterval
+  let previousWidth = window.outerWidth
+  let previousHeight = window.outerHeight
+  let zoomLevel = window.devicePixelRatio || 1
+
+  function startDevToolsDetection() {
+    // Si hay un bloqueo activo, no procesar detección
+    if (document.getElementById("security-block-container")) {
+      return
+    }
+
+    // Obtener el nivel de zoom actual
+    const currentZoomLevel = window.devicePixelRatio || 1
+
+    // Verificar si el zoom ha cambiado
+    const zoomChanged = Math.abs(currentZoomLevel - zoomLevel) > 0.01
+
+    // Actualizar el nivel de zoom si ha cambiado
+    if (zoomChanged) {
+      zoomLevel = currentZoomLevel
+      previousWidth = window.outerWidth
+      previousHeight = window.outerHeight
+      return
+    }
+
+    // Calcular cambios en las dimensiones
+    const widthDifference = Math.abs(window.outerWidth - previousWidth)
+    const heightDifference = Math.abs(window.outerHeight - previousHeight)
+
+    // Actualizar dimensiones previas
+    previousWidth = window.outerWidth
+    previousHeight = window.outerHeight
+
+    // Verificar si hay un cambio significativo que no sea por zoom
+    if ((widthDifference > 100 || heightDifference > 100) && !zoomChanged) {
+      const threshold = 160 * zoomLevel
+      const widthThreshold = window.outerWidth - window.innerWidth * zoomLevel > threshold
+      const heightThreshold = window.outerHeight - window.innerHeight * zoomLevel > threshold
+
+      if (widthThreshold || heightThreshold) {
+        registerInvalidAction("herramientas de desarrollador")
+
+        // Intentar ocultar el contenido mientras las DevTools están abiertas
+        document.documentElement.style.display = "none"
+        setTimeout(() => {
+          document.documentElement.style.display = "block"
+        }, 500)
+      }
+    }
+  }
+
+  // Iniciar detección
+  devtoolsDetectionInterval = setInterval(startDevToolsDetection, 1000)
+
+  // 4. Deshabilitar arrastrar imágenes
+  document.addEventListener("dragstart", (e) => {
+    e.preventDefault()
+    registerInvalidAction("arrastrar elementos")
+    return false
+  })
+
+  // 5. Detectar cuando el usuario intenta copiar contenido
+  document.addEventListener("copy", (e) => {
+    // Permitir copia en campos de entrada
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
+      return true
+    }
+    e.preventDefault()
+    registerInvalidAction("copiar contenido")
+    return false
+  })
+
+  // 6. Mensaje al intentar guardar la página
+  document.addEventListener("keydown", (e) => {
+    // Ctrl+S o Cmd+S (Mac)
+    if ((e.ctrlKey && e.key === "s") || (e.metaKey && e.key === "s")) {
+      e.preventDefault()
+      registerInvalidAction("guardar página")
+      return false
+    }
+  })
+
+  // Agregar estilos para la impresión
+  const printStyles = document.createElement("style")
+  printStyles.type = "text/css"
+  printStyles.media = "print"
+  printStyles.innerHTML = `
+    @media print {
+      body * {
+        display: none !important;
+      }
+      body:after {
+        content: "IMPRESIÓN NO PERMITIDA";
+        display: block !important;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        font-size: 50px;
+        font-weight: bold;
+        color: #ff0000;
+        text-align: center;
+        padding-top: 40vh;
+        background-color: white;
+        z-index: 9999;
+      }
+    }
+  `
+  document.head.appendChild(printStyles)
 })

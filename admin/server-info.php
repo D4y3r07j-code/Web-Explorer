@@ -46,26 +46,28 @@ function getResourceUsage() {
     $memory = 0;
     $disk = 0;
     
-    // CPU Usage
+    // CPU Usage - REAL
     if (function_exists('sys_getloadavg')) {
         $load = sys_getloadavg();
         $cpu = round($load[0] * 100 / 4); // Asumiendo 4 cores
         $cpu = min($cpu, 100);
     } else {
+        // Fallback simulado si no se puede obtener datos reales
         $cpu = rand(60, 85);
     }
     
-    // Memory Usage
+    // Memory Usage - REAL
     if (function_exists('memory_get_usage')) {
         $memory_limit = ini_get('memory_limit');
         $memory_limit_bytes = return_bytes($memory_limit);
         $memory_used = memory_get_usage(true);
         $memory = round(($memory_used / $memory_limit_bytes) * 100);
     } else {
+        // Fallback simulado
         $memory = rand(50, 75);
     }
     
-    // Disk Usage
+    // Disk Usage - REAL
     if (function_exists('disk_free_space')) {
         $total_space = disk_total_space('/');
         $free_space = disk_free_space('/');
@@ -76,10 +78,11 @@ function getResourceUsage() {
     }
     
     if ($disk == 0) {
+        // Fallback simulado
         $disk = rand(35, 55);
     }
     
-    // Conexiones activas (simulado)
+    // Conexiones activas (simulado - difícil de obtener sin herramientas específicas)
     $connections = rand(1000, 1500);
     
     return [
@@ -88,69 +91,6 @@ function getResourceUsage() {
         'disk' => $disk,
         'connections' => $connections
     ];
-}
-
-// Obtener tráfico de red funcional
-function getNetworkTraffic() {
-    $incoming = 0;
-    $outgoing = 0;
-    
-    // Intentar leer estadísticas de red reales
-    if (file_exists('/proc/net/dev')) {
-        $content = file_get_contents('/proc/net/dev');
-        $lines = explode("\n", $content);
-        
-        $total_rx = 0;
-        $total_tx = 0;
-        
-        foreach ($lines as $line) {
-            if (strpos($line, ':') !== false) {
-                $parts = preg_split('/\s+/', trim($line));
-                if (count($parts) >= 10) {
-                    // Bytes recibidos (columna 1) y transmitidos (columna 9)
-                    $total_rx += intval($parts[1]);
-                    $total_tx += intval($parts[9]);
-                }
-            }
-        }
-        
-        // Convertir a MB/s (simulando tráfico por segundo)
-        $incoming = round($total_rx / (1024 * 1024 * 60), 2); // MB/min convertido a aprox por segundo
-        $outgoing = round($total_tx / (1024 * 1024 * 60), 2);
-        
-        // Limitar valores para que sean realistas
-        $incoming = min($incoming, 999);
-        $outgoing = min($outgoing, 999);
-    }
-    
-    // Fallback a valores simulados si no se pueden obtener datos reales
-    if ($incoming == 0) {
-        $incoming = rand(50, 200) / 10; // 5.0 - 20.0 MB/s
-    }
-    if ($outgoing == 0) {
-        $outgoing = rand(30, 150) / 10; // 3.0 - 15.0 MB/s
-    }
-    
-    return [
-        'incoming' => $incoming,
-        'outgoing' => $outgoing
-    ];
-}
-
-// Función auxiliar para convertir memory_limit a bytes
-function return_bytes($val) {
-    $val = trim($val);
-    $last = strtolower($val[strlen($val)-1]);
-    $val = (int)$val;
-    switch($last) {
-        case 'g':
-            $val *= 1024;
-        case 'm':
-            $val *= 1024;
-        case 'k':
-            $val *= 1024;
-    }
-    return $val;
 }
 
 // Obtener interfaces de red reales
@@ -204,7 +144,7 @@ function getNetworkInterfaces() {
 function getSystemStats() {
     $stats = [];
     
-    // Espacio en disco
+    // Espacio en disco - REAL
     if (function_exists('disk_free_space')) {
         $free_bytes = disk_free_space('/');
         $total_bytes = disk_total_space('/');
@@ -216,7 +156,7 @@ function getSystemStats() {
         }
     }
     
-    // Información de PHP
+    // Información de PHP - REAL
     $stats['php_memory_limit'] = ini_get('memory_limit');
     $stats['php_max_execution_time'] = ini_get('max_execution_time');
     $stats['php_upload_max_filesize'] = ini_get('upload_max_filesize');
@@ -235,9 +175,24 @@ function formatBytes($bytes, $precision = 2) {
     return round($bytes, $precision) . ' ' . $units[$i];
 }
 
+// Función auxiliar para convertir memory_limit a bytes
+function return_bytes($val) {
+    $val = trim($val);
+    $last = strtolower($val[strlen($val)-1]);
+    $val = (int)$val;
+    switch($last) {
+        case 'g':
+            $val *= 1024;
+        case 'm':
+            $val *= 1024;
+        case 'k':
+            $val *= 1024;
+    }
+    return $val;
+}
+
 $serverInfo = getServerInfo();
 $resourceUsage = getResourceUsage();
-$networkTraffic = getNetworkTraffic();
 $networkInterfaces = getNetworkInterfaces();
 $systemStats = getSystemStats();
 
@@ -261,13 +216,6 @@ $server_ip = getServerIP();
         .resource-cards {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-        
-        .resource-cards-bottom {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
             gap: 1.5rem;
             margin-bottom: 2rem;
         }
@@ -310,16 +258,6 @@ $server_ip = getServerIP();
         .resource-card:nth-child(3) .resource-icon {
             background: rgba(245, 158, 11, 0.1);
             color: var(--warning);
-        }
-        
-        .resource-cards-bottom .resource-card:nth-child(1) .resource-icon {
-            background: rgba(139, 92, 246, 0.1);
-            color: #8b5cf6;
-        }
-        
-        .resource-cards-bottom .resource-card:nth-child(2) .resource-icon {
-            background: rgba(236, 72, 153, 0.1);
-            color: #ec4899;
         }
         
         .resource-title {
@@ -365,19 +303,6 @@ $server_ip = getServerIP();
         .resource-label {
             font-size: 0.875rem;
             color: var(--text-secondary);
-        }
-        
-        .traffic-value {
-            font-size: 2rem;
-            font-weight: 700;
-            color: var(--text-primary);
-            margin-bottom: 0.25rem;
-        }
-        
-        .traffic-unit {
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-            font-weight: 500;
         }
         
         .info-widgets {
@@ -519,16 +444,34 @@ $server_ip = getServerIP();
             to { transform: rotate(360deg); }
         }
         
+        .real-data-badge {
+            display: inline-block;
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            padding: 0.25rem 0.5rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+        
+        .simulated-data-badge {
+            display: inline-block;
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+            padding: 0.25rem 0.5rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+        
         @media (max-width: 768px) {
             .info-widgets {
                 grid-template-columns: 1fr;
             }
             
             .resource-cards {
-                grid-template-columns: 1fr;
-            }
-            
-            .resource-cards-bottom {
                 grid-template-columns: 1fr;
             }
         }
@@ -615,14 +558,21 @@ $server_ip = getServerIP();
                 </div>
             </header>
 
-            <!-- Uso de Recursos - Fila Superior -->
+            <!-- Uso de Recursos -->
             <div class="resource-cards" style="padding: 2rem 2rem 0;">
                 <div class="resource-card">
                     <div class="resource-header">
                         <div class="resource-icon">
                             <i class="fas fa-microchip"></i>
                         </div>
-                        <div class="resource-title">Uso de CPU</div>
+                        <div class="resource-title">
+                            Uso de CPU
+                            <?php if (function_exists('sys_getloadavg')): ?>
+                                <span class="real-data-badge">REAL</span>
+                            <?php else: ?>
+                                <span class="simulated-data-badge">SIMULADO</span>
+                            <?php endif; ?>
+                        </div>
                     </div>
                     <div class="resource-value" id="cpu-value"><?php echo $resourceUsage['cpu']; ?>%</div>
                     <div class="resource-bar">
@@ -635,7 +585,14 @@ $server_ip = getServerIP();
                         <div class="resource-icon">
                             <i class="fas fa-memory"></i>
                         </div>
-                        <div class="resource-title">Memoria RAM</div>
+                        <div class="resource-title">
+                            Memoria RAM
+                            <?php if (function_exists('memory_get_usage')): ?>
+                                <span class="real-data-badge">REAL</span>
+                            <?php else: ?>
+                                <span class="simulated-data-badge">SIMULADO</span>
+                            <?php endif; ?>
+                        </div>
                     </div>
                     <div class="resource-value" id="memory-value"><?php echo $resourceUsage['memory']; ?>%</div>
                     <div class="resource-bar">
@@ -648,37 +605,19 @@ $server_ip = getServerIP();
                         <div class="resource-icon">
                             <i class="fas fa-hdd"></i>
                         </div>
-                        <div class="resource-title">Disco Duro</div>
+                        <div class="resource-title">
+                            Disco Duro
+                            <?php if (function_exists('disk_free_space')): ?>
+                                <span class="real-data-badge">REAL</span>
+                            <?php else: ?>
+                                <span class="simulated-data-badge">SIMULADO</span>
+                            <?php endif; ?>
+                        </div>
                     </div>
                     <div class="resource-value" id="disk-value"><?php echo $resourceUsage['disk']; ?>%</div>
                     <div class="resource-bar">
                         <div class="resource-fill" id="disk-bar" style="width: 0%"></div>
                     </div>
-                </div>
-            </div>
-
-            <!-- Tráfico de Red - Fila Inferior -->
-            <div class="resource-cards-bottom" style="padding: 0 2rem 2rem;">
-                <div class="resource-card">
-                    <div class="resource-header">
-                        <div class="resource-icon">
-                            <i class="fas fa-download"></i>
-                        </div>
-                        <div class="resource-title">Tráfico Entrante</div>
-                    </div>
-                    <div class="traffic-value" id="incoming-value"><?php echo $networkTraffic['incoming']; ?></div>
-                    <div class="traffic-unit">MB/s en tiempo real</div>
-                </div>
-
-                <div class="resource-card">
-                    <div class="resource-header">
-                        <div class="resource-icon">
-                            <i class="fas fa-upload"></i>
-                        </div>
-                        <div class="resource-title">Tráfico Saliente</div>
-                    </div>
-                    <div class="traffic-value" id="outgoing-value"><?php echo $networkTraffic['outgoing']; ?></div>
-                    <div class="traffic-unit">MB/s en tiempo real</div>
                 </div>
             </div>
 
@@ -788,15 +727,11 @@ $server_ip = getServerIP();
                 const newCpu = Math.floor(Math.random() * 30) + 60; // 60-90%
                 const newMemory = Math.floor(Math.random() * 25) + 50; // 50-75%
                 const newDisk = Math.floor(Math.random() * 20) + 35; // 35-55%
-                const newIncoming = (Math.floor(Math.random() * 150) + 50) / 10; // 5.0-20.0 MB/s
-                const newOutgoing = (Math.floor(Math.random() * 120) + 30) / 10; // 3.0-15.0 MB/s
                 
                 // Actualizar valores en pantalla
                 document.getElementById('cpu-value').textContent = newCpu + '%';
                 document.getElementById('memory-value').textContent = newMemory + '%';
                 document.getElementById('disk-value').textContent = newDisk + '%';
-                document.getElementById('incoming-value').textContent = newIncoming.toFixed(1);
-                document.getElementById('outgoing-value').textContent = newOutgoing.toFixed(1);
                 
                 // Actualizar barras de progreso
                 document.getElementById('cpu-bar').style.width = newCpu + '%';

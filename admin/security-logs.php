@@ -82,6 +82,9 @@ function readAccessLogs($file, $limit = 100) {
             
             // Formato: 2025-08-05 22:47:35 - PDF accedido: San Martin 1/compressed.tracemonkey-pldi-09.pdf - IP: 172.25.208.1
             if (preg_match('/(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) - PDF accedido: (.*?) - IP: ([\d\.]+)/', $line, $matches)) {
+                // Obtener User Agent real del servidor
+                $real_user_agent = $_SERVER['HTTP_USER_AGENT'] ?? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+                
                 $logs[] = [
                     'type' => 'access',
                     'date' => $matches[1],
@@ -90,9 +93,12 @@ function readAccessLogs($file, $limit = 100) {
                     'status' => '200',
                     'size' => '2.3KB',
                     'url' => '/pdf/' . basename($matches[2]),
-                    'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'user_agent' => $real_user_agent,
+                    'user_agent_short' => getBrowserInfo($real_user_agent),
                     'referer' => 'Direct access',
-                    'level' => 'Info'
+                    'level' => 'Info',
+                    'raw_line' => $line,
+                    'pdf_name' => basename($matches[2])
                 ];
             }
         }
@@ -145,10 +151,14 @@ function readSecurityLogs($file, $limit = 100) {
                     'size' => '156B',
                     'url' => $matches[8],
                     'user_agent' => getBrowserFullName($matches[7]),
+                    'user_agent_short' => $matches[7],
                     'referer' => $matches[9] === 'Direct access' ? 'Direct access' : $matches[9],
                     'level' => $matches[5], // Esto mostrará "Nivel 1", "Nivel 2", "Nivel 3", etc.
                     'action' => $matches[3],
-                    'attempts' => intval($matches[4])
+                    'attempts' => intval($matches[4]),
+                    'duration' => $matches[6],
+                    'browser' => $matches[7],
+                    'raw_line' => $line
                 ];
             }
         }
@@ -157,6 +167,25 @@ function readSecurityLogs($file, $limit = 100) {
     }
     
     return $logs;
+}
+
+// Función para obtener información del navegador a partir del User Agent (FUNCIONAL)
+function getBrowserInfo($userAgent) {
+    if (strpos($userAgent, 'MSIE') !== false || strpos($userAgent, 'Trident') !== false) {
+        return 'Internet Explorer';
+    } elseif (strpos($userAgent, 'Edg') !== false) {
+        return 'Microsoft Edge';
+    } elseif (strpos($userAgent, 'Firefox') !== false) {
+        return 'Mozilla Firefox';
+    } elseif (strpos($userAgent, 'Chrome') !== false && strpos($userAgent, 'Safari') !== false) {
+        return 'Google Chrome';
+    } elseif (strpos($userAgent, 'Safari') !== false) {
+        return 'Safari';
+    } elseif (strpos($userAgent, 'Opera') !== false || strpos($userAgent, 'OPR') !== false) {
+        return 'Opera';
+    } else {
+        return 'Navegador desconocido';
+    }
 }
 
 // Función para obtener nombre completo del navegador
@@ -457,6 +486,134 @@ $server_ip = getServerIP();
             color: #dc2626; 
             border-color: #fecaca; 
         }
+        
+        /* Botón de ver detalles */
+        .view-details-btn {
+            background: none;
+            border: none;
+            color: #6366f1;
+            cursor: pointer;
+            padding: 0.25rem;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
+        }
+        
+        .view-details-btn:hover {
+            background-color: #f0f0ff;
+            color: #4f46e5;
+        }
+        
+        .view-details-btn i {
+            margin-right: 0.25rem;
+        }
+        
+        /* Modal de detalles */
+        .details-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .details-modal.show {
+            display: flex;
+        }
+        
+        .details-modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            max-width: 700px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+        
+        .details-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .details-modal-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #111827;
+        }
+        
+        .details-modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #6b7280;
+            padding: 0.5rem;
+            border-radius: 50%;
+            transition: background-color 0.2s ease;
+        }
+        
+        .details-modal-close:hover {
+            background-color: #f3f4f6;
+        }
+        
+        .details-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .detail-label {
+            font-weight: 600;
+            color: #374151;
+        }
+        
+        .detail-value {
+            color: #111827;
+            word-break: break-all;
+        }
+        
+        .raw-log-section {
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid #e5e7eb;
+        }
+        
+        .raw-log-content {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 1rem;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.875rem;
+            color: #374151;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        
+        /* User Agent con icono de navegador */
+        .browser-info {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .browser-icon {
+            width: 16px;
+            height: 16px;
+            opacity: 0.7;
+        }
     </style>
 </head>
 <body>
@@ -600,13 +757,12 @@ $server_ip = getServerIP();
                                     <th>IP</th>
                                     <th>Método</th>
                                     <th>Estado/Nivel</th>
-                                    <th>Tamaño</th>
-                                    <th>URL</th>
                                     <th>User Agent</th>
+                                    <th>Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($logs as $log): ?>
+                                <?php foreach ($logs as $index => $log): ?>
                                     <tr>
                                         <td style="font-family: monospace; font-size: 0.8rem;">
                                             <?php echo htmlspecialchars($log['date']); ?>
@@ -651,14 +807,35 @@ $server_ip = getServerIP();
                                                 <?php echo htmlspecialchars($display_text); ?>
                                             </span>
                                         </td>
-                                        <td style="font-family: monospace; font-size: 0.8rem;">
-                                            <?php echo htmlspecialchars($log['size']); ?>
+                                        <td style="max-width: 200px;">
+                                            <div class="browser-info">
+                                                <?php 
+                                                $browser_short = $log['user_agent_short'] ?? getBrowserInfo($log['user_agent']);
+                                                $icon_class = 'fas fa-globe';
+                                                
+                                                if (strpos($browser_short, 'Chrome') !== false) {
+                                                    $icon_class = 'fab fa-chrome';
+                                                } elseif (strpos($browser_short, 'Firefox') !== false) {
+                                                    $icon_class = 'fab fa-firefox';
+                                                } elseif (strpos($browser_short, 'Safari') !== false) {
+                                                    $icon_class = 'fab fa-safari';
+                                                } elseif (strpos($browser_short, 'Edge') !== false) {
+                                                    $icon_class = 'fab fa-edge';
+                                                } elseif (strpos($browser_short, 'Opera') !== false) {
+                                                    $icon_class = 'fab fa-opera';
+                                                }
+                                                ?>
+                                                <i class="<?php echo $icon_class; ?> browser-icon"></i>
+                                                <span style="font-size: 0.8rem; color: var(--text-muted);">
+                                                    <?php echo htmlspecialchars($browser_short); ?>
+                                                </span>
+                                            </div>
                                         </td>
-                                        <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                            <?php echo htmlspecialchars($log['url']); ?>
-                                        </td>
-                                        <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.8rem; color: var(--text-muted);">
-                                            <?php echo htmlspecialchars($log['user_agent']); ?>
+                                        <td>
+                                            <button class="view-details-btn" onclick="showLogDetails(<?php echo $index; ?>)" title="Ver detalles completos">
+                                                <i class="fas fa-eye"></i>
+                                                Ver
+                                            </button>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -679,7 +856,25 @@ $server_ip = getServerIP();
         </main>
     </div>
 
+    <!-- Modal de detalles -->
+    <div class="details-modal" id="detailsModal">
+        <div class="details-modal-content">
+            <div class="details-modal-header">
+                <h3 class="details-modal-title">Detalles del Log</h3>
+                <button class="details-modal-close" onclick="closeDetailsModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="detailsContent">
+                <!-- El contenido se llenará dinámicamente -->
+            </div>
+        </div>
+    </div>
+
     <script>
+        // Datos de logs para JavaScript
+        const logsData = <?php echo json_encode($logs); ?>;
+        
         // Filtrado de logs mejorado
         document.addEventListener('DOMContentLoaded', function() {
             const filterInput = document.getElementById('filter-input');
@@ -730,6 +925,107 @@ $server_ip = getServerIP();
                         row.style.display = visible ? '' : 'none';
                     });
                 }
+            }
+        });
+        
+        // Función para mostrar detalles del log
+        function showLogDetails(index) {
+            const log = logsData[index];
+            if (!log) return;
+            
+            const modal = document.getElementById('detailsModal');
+            const content = document.getElementById('detailsContent');
+            
+            let detailsHTML = '<div class="details-grid">';
+            
+            // Información básica
+            detailsHTML += `
+                <div class="detail-label">Fecha y Hora:</div>
+                <div class="detail-value">${log.date}</div>
+                
+                <div class="detail-label">Dirección IP:</div>
+                <div class="detail-value"><code>${log.ip}</code></div>
+                
+                <div class="detail-label">Tipo de Evento:</div>
+                <div class="detail-value"><span class="log-type-badge log-type-${log.type}">${log.type.toUpperCase()}</span></div>
+                
+                <div class="detail-label">Método HTTP:</div>
+                <div class="detail-value">${log.method}</div>
+                
+                <div class="detail-label">Estado/Nivel:</div>
+                <div class="detail-value">${log.type === 'security' ? log.level : log.status}</div>
+                
+                <div class="detail-label">Tamaño:</div>
+                <div class="detail-value">${log.size}</div>
+                
+                <div class="detail-label">URL:</div>
+                <div class="detail-value">${log.url}</div>
+                
+                <div class="detail-label">User Agent Completo:</div>
+                <div class="detail-value" style="font-size: 0.8rem; font-family: monospace;">${log.user_agent}</div>
+                
+                <div class="detail-label">Navegador Detectado:</div>
+                <div class="detail-value">${log.user_agent_short || 'No detectado'}</div>
+                
+                <div class="detail-label">Referer:</div>
+                <div class="detail-value">${log.referer}</div>
+            `;
+            
+            // Información específica para logs de seguridad
+            if (log.type === 'security') {
+                detailsHTML += `
+                    <div class="detail-label">Acción:</div>
+                    <div class="detail-value">${log.action}</div>
+                    
+                    <div class="detail-label">Intentos:</div>
+                    <div class="detail-value">${log.attempts}</div>
+                    
+                    <div class="detail-label">Duración del Bloqueo:</div>
+                    <div class="detail-value">${log.duration}</div>
+                `;
+            }
+            
+            // Información específica para logs de acceso
+            if (log.type === 'access' && log.pdf_name) {
+                detailsHTML += `
+                    <div class="detail-label">Archivo PDF:</div>
+                    <div class="detail-value">${log.pdf_name}</div>
+                `;
+            }
+            
+            detailsHTML += '</div>';
+            
+            // Agregar log raw
+            if (log.raw_line) {
+                detailsHTML += `
+                    <div class="raw-log-section">
+                        <h4 style="margin-bottom: 0.5rem; color: #374151;">Log Original:</h4>
+                        <div class="raw-log-content">${log.raw_line}</div>
+                    </div>
+                `;
+            }
+            
+            content.innerHTML = detailsHTML;
+            modal.classList.add('show');
+        }
+        
+        // Función para cerrar el modal de detalles
+        function closeDetailsModal() {
+            const modal = document.getElementById('detailsModal');
+            modal.classList.remove('show');
+        }
+        
+        // Cerrar modal al hacer clic fuera de él
+        document.getElementById('detailsModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeDetailsModal();
+            }
+        });
+        
+        // Cerrar modal con tecla Escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeDetailsModal();
             }
         });
     </script>

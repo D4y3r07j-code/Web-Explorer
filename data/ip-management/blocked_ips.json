@@ -1,1 +1,9 @@
-[]
+{
+    "172.25.208.1": {
+        "reason": "BLOQUEO AUTOM\u00c1TICO PERMANENTE - 9 violaciones de seguridad detectadas. Solo un administrador puede remover este bloqueo.",
+        "blocked_at": "2025-08-07 01:04:55",
+        "blocked_by": "Sistema de Seguridad Autom\u00e1tico",
+        "duration": null,
+        "expires_at": null
+    }
+}

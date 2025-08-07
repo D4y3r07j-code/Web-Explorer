@@ -32,21 +32,35 @@ class SecurityAutoBlocker {
         // Registrar el evento
         $this->logSecurityEvent($ip, $action, $level, $attempts);
         
+        // Log para debugging
+        error_log("AUTO-BLOCKER: Processing event - IP=$ip, Action=$action, Level=$level, Attempts=$attempts");
+        
         // Si se alcanzaron 9 o más intentos, bloquear automáticamente la IP de forma PERMANENTE
         if ($attempts >= 9) {
+            error_log("AUTO-BLOCKER: Triggering permanent block for IP $ip with $attempts attempts");
             $result = $this->autoBlockIPPermanently($ip, $attempts);
             return [
                 'success' => true,
                 'blocked' => $result['success'],
                 'message' => $result['message'],
-                'permanent' => true
+                'permanent' => true,
+                'debug' => [
+                    'ip' => $ip,
+                    'attempts' => $attempts,
+                    'block_result' => $result
+                ]
             ];
         }
         
         return [
             'success' => true,
             'blocked' => false,
-            'message' => 'Evento registrado'
+            'message' => 'Evento registrado - no se alcanzó el límite para bloqueo',
+            'debug' => [
+                'ip' => $ip,
+                'attempts' => $attempts,
+                'limit' => 9
+            ]
         ];
     }
     
@@ -61,10 +75,12 @@ class SecurityAutoBlocker {
         
         if ($result['success']) {
             // Log adicional para el bloqueo automático permanente
-            error_log("PERMANENT AUTO-BLOCK: IP $ip blocked permanently after $attempts security violations");
+            error_log("PERMANENT AUTO-BLOCK SUCCESS: IP $ip blocked permanently after $attempts security violations");
             
             // Registrar en log especial de bloqueos permanentes
             $this->logPermanentBlock($ip, $attempts);
+        } else {
+            error_log("PERMANENT AUTO-BLOCK FAILED: " . $result['message']);
         }
         
         return $result;
@@ -197,6 +213,17 @@ class SecurityAutoBlocker {
     }
 }
 
+// Configurar headers CORS
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
+
+// Manejar preflight requests
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
+
 // Endpoint para recibir eventos de seguridad desde JavaScript
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['security_event'])) {
     header('Content-Type: application/json');
@@ -222,13 +249,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['security_event'])) {
     $level = isset($_POST['level']) ? intval($_POST['level']) : -1;
     $attempts = isset($_POST['attempts']) ? intval($_POST['attempts']) : 0;
     
+    // Log para debugging
+    error_log("AUTO-BLOCKER ENDPOINT: Received request - IP=$ip, Action=$action, Level=$level, Attempts=$attempts");
+    
     $autoBlocker = new SecurityAutoBlocker();
     $result = $autoBlocker->processSecurityEvent($ip, $action, $level, $attempts);
     
     // Log adicional para debugging
-    error_log("Security Auto-Blocker: IP=$ip, Action=$action, Level=$level, Attempts=$attempts, Blocked=" . ($result['blocked'] ? 'YES' : 'NO'));
+    error_log("AUTO-BLOCKER RESULT: " . json_encode($result));
     
     echo json_encode($result);
+    exit;
+}
+
+// Endpoint de testing
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['test'])) {
+    header('Content-Type: application/json');
+    
+    $autoBlocker = new SecurityAutoBlocker();
+    $test_ip = '192.168.1.100';
+    
+    // Simular 9 intentos para activar bloqueo permanente
+    $result = $autoBlocker->processSecurityEvent($test_ip, 'test_permanent_block', 2, 9);
+    
+    echo json_encode([
+        'test' => 'permanent_block',
+        'result' => $result,
+        'blocked_ips' => $autoBlocker->getPermanentlyBlockedIPs()
+    ]);
+    exit;
+}
+
+// Si no hay parámetros válidos, mostrar información de debug
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    header('Content-Type: application/json');
+    
+    $autoBlocker = new SecurityAutoBlocker();
+    
+    echo json_encode([
+        'status' => 'Security Auto-Blocker Active',
+        'stats' => $autoBlocker->getSecurityStats(),
+        'permanent_blocks' => count($autoBlocker->getPermanentlyBlockedIPs()),
+        'timestamp' => date('Y-m-d H:i:s')
+    ]);
     exit;
 }
 ?>

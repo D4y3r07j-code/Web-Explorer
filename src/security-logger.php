@@ -5,8 +5,8 @@
  */
 
 // Configuración - logs fuera del directorio web
-$security_log_dir = '../logs/security';
-$access_log_dir = '../logs/access';
+$security_log_dir = __DIR__ . '/../logs/security';
+$access_log_dir = __DIR__ . '/../logs/access';
 $security_log_file = $security_log_dir . '/security_log.txt';
 $access_log_file = $access_log_dir . '/access_log.txt';
 
@@ -60,7 +60,7 @@ function logSecurityEvent($action, $level = -1, $attempts = 0, $blockDuration = 
     $result = file_put_contents($security_log_file, $logMessage, FILE_APPEND | LOCK_EX);
     
     // Log adicional para debugging
-    error_log("Security Event Logged: $action, Level: $levelText, IP: $ip, Attempts: $attempts");
+    error_log("Security Event Logged: $action, Level: $levelText, IP: $ip, Attempts: $attempts, File: $security_log_file, Result: " . ($result ? 'SUCCESS' : 'FAILED'));
     
     return $result !== false;
 }
@@ -143,22 +143,28 @@ function formatBlockDuration($seconds) {
     }
 }
 
+// Configurar headers CORS
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
+
+// Manejar preflight requests
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
+
 /**
  * Endpoint para recibir eventos de seguridad desde JavaScript
  */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-    // Configurar headers para CORS si es necesario
-    header('Access-Control-Allow-Origin: *');
-    header('Access-Control-Allow-Methods: POST');
-    header('Access-Control-Allow-Headers: Content-Type');
-    
     $action = $_POST['action'] ?? 'unknown';
     $level = isset($_POST['level']) ? intval($_POST['level']) : -1;
     $attempts = isset($_POST['attempts']) ? intval($_POST['attempts']) : 0;
     $blockDuration = isset($_POST['duration']) ? intval($_POST['duration']) : 0;
     
     // Log para debugging
-    error_log("Received security event: Action=$action, Level=$level, Attempts=$attempts, Duration=$blockDuration");
+    error_log("SECURITY LOGGER: Received event - Action=$action, Level=$level, Attempts=$attempts, Duration=$blockDuration");
     
     $success = logSecurityEvent($action, $level, $attempts, $blockDuration);
     
@@ -172,7 +178,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             'level' => $level,
             'attempts' => $attempts,
             'duration' => $blockDuration,
-            'ip' => getClientIP()
+            'ip' => getClientIP(),
+            'log_file' => $security_log_file,
+            'file_writable' => is_writable(dirname($security_log_file))
         ]
     ]);
     exit;
@@ -196,7 +204,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['test_security'])) {
         'success' => $testSuccess,
         'message' => 'Test security event logged',
         'file_exists' => file_exists($security_log_file),
-        'file_writable' => is_writable(dirname($security_log_file))
+        'file_writable' => is_writable(dirname($security_log_file)),
+        'log_file_path' => $security_log_file
+    ]);
+    exit;
+}
+
+// Si no hay parámetros válidos, mostrar información de debug
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    header('Content-Type: application/json');
+    echo json_encode([
+        'status' => 'Security Logger Active',
+        'log_file' => $security_log_file,
+        'file_exists' => file_exists($security_log_file),
+        'dir_writable' => is_writable(dirname($security_log_file)),
+        'current_ip' => getClientIP(),
+        'timestamp' => date('Y-m-d H:i:s')
     ]);
     exit;
 }

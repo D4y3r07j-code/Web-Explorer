@@ -1,10 +1,6 @@
 <?php
 // Verificar bloqueo de IP antes de mostrar contenido
-require_once '../src/security-middleware.php';
-
-$securityMiddleware = new SecurityMiddleware();
-$client_ip = $securityMiddleware->getClientIP();
-$securityMiddleware->checkIP($client_ip);
+require_once __DIR__ . '/../src/security-middleware.php';
 
 // Configuración
 $root_dir = './campamentos'; // Enlace simbólico a /srv/samba/campamentos/
@@ -33,7 +29,7 @@ function countContents($dir) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo $title; ?></title>
-    <?php include './src/theme-handler.php'; ?>
+    <?php include __DIR__ . '../src/theme-handler.php'; ?>
     <link rel="stylesheet" href="./assets/css/styles.css">
     <link rel="stylesheet" href="./assets/css/security.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"> 

@@ -1,4 +1,9 @@
 <?php
+/**
+ * Middleware de seguridad - Verificación de IPs bloqueadas
+ * Se incluye en todas las páginas principales para verificar bloqueos
+ */
+
 require_once __DIR__ . '/ip-manager.php';
 
 class SecurityMiddleware {
@@ -8,31 +13,51 @@ class SecurityMiddleware {
         $this->ipManager = new IPManager();
     }
     
-    public function checkIP($ip) {
-        // Limpiar bloqueos expirados (solo los temporales)
-        $this->ipManager->cleanExpiredBlocks();
+    public function getClientIP() {
+        $ip_keys = ['HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'HTTP_CLIENT_IP', 'REMOTE_ADDR'];
         
-        // Verificar si la IP está bloqueada
+        foreach ($ip_keys as $key) {
+            if (!empty($_SERVER[$key])) {
+                $ip = $_SERVER[$key];
+                if (strpos($ip, ',') !== false) {
+                    $ip = trim(explode(',', $ip)[0]);
+                }
+                if (filter_var($ip, FILTER_VALIDATE_IP)) {
+                    return $ip;
+                }
+            }
+        }
+        
+        return $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+    }
+    
+    public function checkIP($ip) {
+        // Verificar si está en whitelist (tiene prioridad)
+        if ($this->ipManager->isWhitelisted($ip)) {
+            return false; // No está bloqueada
+        }
+        
+        // Verificar si está bloqueada
         if ($this->ipManager->isBlocked($ip)) {
-            $blocked_data = $this->getBlockedIPData($ip);
-            $this->showBlockedPage($ip, $blocked_data);
+            // Obtener información del bloqueo
+            $blocked_ips = $this->ipManager->getBlockedIPs();
+            $block_info = $blocked_ips[$ip] ?? null;
+            
+            // Mostrar página de bloqueo
+            $this->showBlockedPage($ip, $block_info);
             exit;
         }
-    }
-    
-    private function getBlockedIPData($ip) {
-        $blocked_ips = $this->ipManager->getBlockedIPs();
-        return $blocked_ips[$ip] ?? null;
-    }
-    
-    private function showBlockedPage($ip, $blocked_data) {
-        http_response_code(403);
         
-        // Determinar si es bloqueo permanente o temporal
-        $is_permanent = !isset($blocked_data['duration']) || $blocked_data['duration'] === null;
-        $reason = $blocked_data['reason'] ?? 'Múltiples violaciones de seguridad detectadas';
-        $blocked_at = $blocked_data['blocked_at'] ?? 'Fecha desconocida';
-        $blocked_by = $blocked_data['blocked_by'] ?? 'Sistema de Seguridad';
+        return false;
+    }
+    
+    private function showBlockedPage($ip, $block_info) {
+        $is_permanent = !isset($block_info['expires_at']) || !$block_info['expires_at'];
+        $block_type = $is_permanent ? 'PERMANENTE' : 'TEMPORAL';
+        $reason = $block_info['reason'] ?? 'Múltiples violaciones de seguridad';
+        $blocked_at = $block_info['blocked_at'] ?? date('Y-m-d H:i:s');
+        $expires_at = $block_info['expires_at'] ?? null;
+        $blocked_by = $block_info['blocked_by'] ?? 'Sistema automático';
         
         ?>
         <!DOCTYPE html>
@@ -40,7 +65,7 @@ class SecurityMiddleware {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>IP Bloqueada - Web Explorer</title>
+            <title>Acceso Bloqueado - Web Explorer</title>
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
             <style>
                 * {
@@ -50,220 +75,243 @@ class SecurityMiddleware {
                 }
                 
                 body {
-                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                    background-color: rgba(0, 0, 0, 0.98);
-                    margin: 0;
-                    padding: 0;
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                    background: rgba(0, 0, 0, 0.98);
+                    color: #ffffff;
                     min-height: 100vh;
-                    color: white;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 20px;
+                    line-height: 1.6;
                 }
                 
                 .blocked-container {
-                    background-color: #121212;
-                    border-radius: 12px;
+                    background: #121212;
+                    border-radius: 16px;
                     padding: 40px;
                     max-width: 500px;
-                    width: 90%;
-                    text-align: center;
-                    color: white;
-                    animation: fadeIn 0.4s ease-out;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-                }
-                
-                .blocked-icon {
-                    font-size: 50px;
-                    margin-bottom: 24px;
-                    color: #ff3b30;
-                    background-color: transparent;
-                    width: 80px;
-                    height: 80px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    border-radius: 50%;
-                    border: 3px solid #ff3b30;
-                }
-                
-                .blocked-title {
-                    font-size: 28px;
-                    margin-bottom: 16px;
-                    color: white;
-                    font-weight: 600;
-                }
-                
-                .blocked-subtitle {
-                    font-size: 16px;
-                    margin-bottom: 24px;
-                    color: rgba(255, 255, 255, 0.7);
-                    font-weight: 400;
-                }
-                
-                .block-type-badge {
-                    background-color: #ff3b30;
-                    color: white;
-                    padding: 8px 16px;
-                    border-radius: 6px;
-                    font-weight: 600;
-                    display: inline-block;
-                    margin-bottom: 24px;
-                    font-size: 14px;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                }
-                
-                .ip-display {
-                    background-color: rgba(255, 255, 255, 0.1);
-                    padding: 12px 20px;
-                    border-radius: 8px;
-                    display: inline-block;
-                    margin: 16px 0;
-                    font-family: 'Courier New', monospace;
-                    font-size: 18px;
-                    font-weight: bold;
-                    letter-spacing: 1px;
-                    border: 1px solid rgba(255, 255, 255, 0.2);
-                    color: white;
-                }
-                
-                .blocked-reason {
-                    background-color: rgba(255, 59, 48, 0.1);
-                    border-left: 3px solid #ff3b30;
-                    padding: 16px;
-                    margin: 20px 0;
-                    border-radius: 4px;
-                    text-align: left;
-                    font-size: 14px;
-                    line-height: 1.5;
-                }
-                
-                .block-info-grid {
-                    display: grid;
-                    grid-template-columns: 1fr 1fr;
-                    gap: 12px;
-                    margin: 20px 0;
                     width: 100%;
-                }
-                
-                .info-item {
-                    background-color: rgba(255, 255, 255, 0.05);
-                    padding: 12px;
-                    border-radius: 6px;
-                    border: 1px solid rgba(255, 255, 255, 0.1);
-                    text-align: left;
-                }
-                
-                .info-label {
-                    font-size: 11px;
-                    color: rgba(255, 255, 255, 0.6);
-                    margin-bottom: 4px;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                    font-weight: 500;
-                }
-                
-                .info-value {
-                    font-size: 13px;
-                    font-weight: 600;
-                    color: white;
-                }
-                
-                .blocked-info {
-                    background-color: rgba(255, 255, 255, 0.05);
-                    border-radius: 8px;
-                    padding: 20px;
-                    margin: 20px 0;
-                    text-align: left;
-                    border: 1px solid rgba(255, 255, 255, 0.1);
-                }
-                
-                .blocked-info h4 {
-                    color: #ff3b30;
-                    font-size: 16px;
-                    margin-bottom: 12px;
-                    font-weight: 600;
-                }
-                
-                .blocked-info p {
-                    font-size: 14px;
-                    line-height: 1.6;
-                    margin-bottom: 12px;
-                    color: rgba(255, 255, 255, 0.8);
-                }
-                
-                .blocked-info ul {
-                    margin: 12px 0;
-                    padding-left: 20px;
-                }
-                
-                .blocked-info li {
-                    font-size: 13px;
-                    line-height: 1.5;
-                    margin-bottom: 6px;
-                    color: rgba(255, 255, 255, 0.7);
-                }
-                
-                .contact-info {
-                    background-color: rgba(59, 130, 246, 0.1);
-                    border-left: 3px solid #3b82f6;
-                    padding: 16px;
-                    margin: 20px 0;
-                    border-radius: 4px;
-                    text-align: left;
-                    font-size: 14px;
-                    line-height: 1.5;
-                }
-                
-                .security-badge {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 8px;
-                    background-color: rgba(255, 255, 255, 0.1);
-                    padding: 10px 16px;
-                    border-radius: 20px;
-                    font-size: 12px;
-                    margin-top: 20px;
-                    border: 1px solid rgba(255, 255, 255, 0.2);
-                    font-weight: 500;
-                    color: rgba(255, 255, 255, 0.8);
-                }
-                
-                .warning-text {
-                    color: #fbbf24;
-                    font-weight: 600;
-                }
-                
-                .critical-text {
-                    color: #ff3b30;
-                    font-weight: 600;
+                    text-align: center;
+                    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+                    border: 1px solid #333;
+                    animation: fadeIn 0.5s ease-out;
                 }
                 
                 @keyframes fadeIn {
-                    0% {
+                    from {
                         opacity: 0;
-                        transform: translateY(-20px);
+                        transform: translateY(20px);
                     }
-                    100% {
+                    to {
                         opacity: 1;
                         transform: translateY(0);
                     }
                 }
                 
-                @media (max-width: 768px) {
+                .blocked-icon {
+                    width: 80px;
+                    height: 80px;
+                    background: #ff3b30;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 0 auto 24px;
+                    border: 3px solid #ff6b6b;
+                    box-shadow: 0 0 20px rgba(255, 59, 48, 0.3);
+                }
+                
+                .blocked-icon i {
+                    font-size: 32px;
+                    color: white;
+                }
+                
+                .blocked-title {
+                    font-size: 28px;
+                    font-weight: 700;
+                    margin-bottom: 12px;
+                    color: #ffffff;
+                }
+                
+                .blocked-subtitle {
+                    color: #cccccc;
+                    margin-bottom: 24px;
+                    font-size: 16px;
+                }
+                
+                .block-type-badge {
+                    display: inline-block;
+                    background: #ff3b30;
+                    color: white;
+                    padding: 8px 16px;
+                    border-radius: 20px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    margin-bottom: 24px;
+                }
+                
+                .ip-display {
+                    background: #1a1a1a;
+                    border: 1px solid #333;
+                    border-radius: 12px;
+                    padding: 16px;
+                    margin-bottom: 24px;
+                    font-family: 'Monaco', 'Menlo', monospace;
+                    font-size: 18px;
+                    font-weight: 600;
+                    color: #ff3b30;
+                    letter-spacing: 1px;
+                }
+                
+                .block-details {
+                    background: #1a1a1a;
+                    border: 1px solid #333;
+                    border-radius: 12px;
+                    padding: 20px;
+                    margin-bottom: 24px;
+                    text-align: left;
+                }
+                
+                .detail-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 16px;
+                    margin-bottom: 16px;
+                }
+                
+                .detail-item {
+                    background: #0a0a0a;
+                    padding: 12px;
+                    border-radius: 8px;
+                    border: 1px solid #222;
+                }
+                
+                .detail-label {
+                    font-size: 11px;
+                    text-transform: uppercase;
+                    color: #888;
+                    font-weight: 600;
+                    letter-spacing: 0.5px;
+                    margin-bottom: 4px;
+                }
+                
+                .detail-value {
+                    color: #ffffff;
+                    font-weight: 500;
+                    font-size: 14px;
+                }
+                
+                .reason-section {
+                    background: rgba(255, 59, 48, 0.1);
+                    border: 1px solid rgba(255, 59, 48, 0.3);
+                    border-radius: 8px;
+                    padding: 16px;
+                    margin-bottom: 16px;
+                }
+                
+                .reason-label {
+                    font-size: 11px;
+                    text-transform: uppercase;
+                    color: #ff6b6b;
+                    font-weight: 600;
+                    letter-spacing: 0.5px;
+                    margin-bottom: 8px;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+                
+                .reason-text {
+                    color: #ffffff;
+                    font-size: 14px;
+                    line-height: 1.5;
+                }
+                
+                .info-section {
+                    background: #1a1a1a;
+                    border: 1px solid #333;
+                    border-radius: 12px;
+                    padding: 20px;
+                    margin-bottom: 24px;
+                    text-align: left;
+                }
+                
+                .info-title {
+                    color: #ffffff;
+                    font-size: 16px;
+                    font-weight: 600;
+                    margin-bottom: 12px;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                
+                .info-list {
+                    list-style: none;
+                    padding: 0;
+                }
+                
+                .info-list li {
+                    color: #cccccc;
+                    font-size: 14px;
+                    margin-bottom: 8px;
+                    padding-left: 20px;
+                    position: relative;
+                }
+                
+                .info-list li:before {
+                    content: '•';
+                    color: #ff3b30;
+                    position: absolute;
+                    left: 0;
+                    font-weight: bold;
+                }
+                
+                .contact-section {
+                    background: #0a0a0a;
+                    border: 1px solid #222;
+                    border-radius: 12px;
+                    padding: 20px;
+                    text-align: left;
+                }
+                
+                .contact-title {
+                    color: #ffffff;
+                    font-size: 16px;
+                    font-weight: 600;
+                    margin-bottom: 8px;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                
+                .contact-text {
+                    color: #cccccc;
+                    font-size: 14px;
+                    line-height: 1.5;
+                }
+                
+                .contact-email {
+                    color: #ff3b30;
+                    text-decoration: none;
+                    font-weight: 500;
+                }
+                
+                .contact-email:hover {
+                    text-decoration: underline;
+                }
+                
+                @media (max-width: 600px) {
                     .blocked-container {
                         padding: 30px 20px;
-                        max-width: 400px;
+                        margin: 10px;
                     }
                     
-                    .blocked-icon {
-                        font-size: 40px;
-                        width: 70px;
-                        height: 70px;
+                    .detail-grid {
+                        grid-template-columns: 1fr;
                     }
                     
                     .blocked-title {
@@ -272,11 +320,6 @@ class SecurityMiddleware {
                     
                     .ip-display {
                         font-size: 16px;
-                        padding: 10px 16px;
-                    }
-                    
-                    .block-info-grid {
-                        grid-template-columns: 1fr;
                     }
                 }
             </style>
@@ -291,92 +334,94 @@ class SecurityMiddleware {
                 <p class="blocked-subtitle">Tu dirección IP ha sido bloqueada por el sistema de seguridad</p>
                 
                 <div class="block-type-badge">
-                    <?php echo $is_permanent ? 'BLOQUEO PERMANENTE' : 'BLOQUEO TEMPORAL'; ?>
+                    BLOQUEO <?php echo $block_type; ?>
                 </div>
                 
-                <div class="ip-display"><?php echo htmlspecialchars($ip); ?></div>
-                
-                <div class="blocked-reason">
-                    <strong><i class="fas fa-exclamation-triangle"></i> Razón del bloqueo:</strong><br>
-                    <?php echo htmlspecialchars($reason); ?>
+                <div class="ip-display">
+                    <?php echo htmlspecialchars($ip); ?>
                 </div>
                 
-                <div class="block-info-grid">
-                    <div class="info-item">
-                        <div class="info-label">Fecha de bloqueo</div>
-                        <div class="info-value"><?php echo htmlspecialchars($blocked_at); ?></div>
+                <div class="block-details">
+                    <div class="reason-section">
+                        <div class="reason-label">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Razón del bloqueo:
+                        </div>
+                        <div class="reason-text"><?php echo htmlspecialchars($reason); ?></div>
                     </div>
-                    <div class="info-item">
-                        <div class="info-label">Bloqueado por</div>
-                        <div class="info-value"><?php echo htmlspecialchars($blocked_by); ?></div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Tipo de bloqueo</div>
-                        <div class="info-value"><?php echo $is_permanent ? 'Permanente' : 'Temporal'; ?></div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Estado</div>
-                        <div class="info-value critical-text">🔒 Activo</div>
+                    
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <div class="detail-label">Fecha de bloqueo</div>
+                            <div class="detail-value"><?php echo date('d/m/Y H:i:s', strtotime($blocked_at)); ?></div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Bloqueado por</div>
+                            <div class="detail-value"><?php echo htmlspecialchars($blocked_by); ?></div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Tipo de bloqueo</div>
+                            <div class="detail-value"><?php echo $block_type; ?></div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Estado</div>
+                            <div class="detail-value" style="color: #ff3b30;">🔴 Activo</div>
+                        </div>
                     </div>
                 </div>
                 
-                <div class="blocked-info">
-                    <?php if ($is_permanent): ?>
-                        <h4>🚨 BLOQUEO PERMANENTE ACTIVADO</h4>
-                        <p>Tu dirección IP ha sido <span class="critical-text">bloqueada permanentemente</span> debido a múltiples violaciones de seguridad (9 o más intentos de acceso no autorizado).</p>
-                        
-                        <p><strong>¿Qué significa esto?</strong></p>
-                        <ul>
-                            <li>El bloqueo es <strong>permanente</strong> y no expira automáticamente</li>
-                            <li>Solo un <strong>administrador del sistema</strong> puede remover este bloqueo</li>
-                            <li>Todos los intentos de acceso desde esta IP serán denegados</li>
-                            <li>Esta acción ha sido registrada en el sistema de seguridad</li>
-                        </ul>
-                    <?php else: ?>
-                        <h4>⏰ BLOQUEO TEMPORAL ACTIVADO</h4>
-                        <p>Tu dirección IP ha sido bloqueada temporalmente debido a actividades sospechosas.</p>
-                        
-                        <p><strong>¿Cuánto durará el bloqueo?</strong></p>
-                        <p>Este es un bloqueo temporal que expirará automáticamente. Después de este tiempo, el acceso será restaurado.</p>
-                    <?php endif; ?>
+                <?php if ($is_permanent): ?>
+                <div class="info-section">
+                    <div class="info-title">
+                        <i class="fas fa-shield-alt"></i>
+                        🔒 BLOQUEO PERMANENTE ACTIVADO
+                    </div>
+                    <p style="color: #cccccc; font-size: 14px; margin-bottom: 12px;">
+                        Tu dirección IP ha sido <strong style="color: #ff3b30;">bloqueada permanentemente</strong> debido a 
+                        múltiples violaciones de seguridad (9 o más intentos de acceso no autorizados).
+                    </p>
+                    <div class="info-title" style="font-size: 14px; margin-bottom: 8px;">¿Qué significa esto?</div>
+                    <ul class="info-list">
+                        <li>El bloqueo es permanente y no expira automáticamente</li>
+                        <li>Solo un administrador del sistema puede remover este bloqueo</li>
+                        <li>Todos los intentos de acceso desde esta IP serán denegados</li>
+                        <li>Esta acción ha sido registrada en el sistema de seguridad</li>
+                    </ul>
                 </div>
-                
-                <div class="contact-info">
-                    <p><strong>¿Crees que esto es un error?</strong></p>
-                    <p>Si consideras que tu IP fue bloqueada por error, contacta al administrador del sistema. 
-                    <?php if ($is_permanent): ?>
-                    <span class="warning-text">Solo un administrador puede remover bloqueos permanentes.</span>
-                    <?php endif; ?>
+                <?php else: ?>
+                <div class="info-section">
+                    <div class="info-title">
+                        <i class="fas fa-clock"></i>
+                        Bloqueo Temporal
+                    </div>
+                    <p style="color: #cccccc; font-size: 14px;">
+                        Este es un bloqueo temporal que expirará el: 
+                        <strong style="color: #ff3b30;"><?php echo date('d/m/Y H:i:s', strtotime($expires_at)); ?></strong>
                     </p>
                 </div>
+                <?php endif; ?>
                 
-                <div class="security-badge">
-                    <i class="fas fa-shield-alt"></i>
-                    <span>Sistema de Seguridad WebExplorer</span>
+                <div class="contact-section">
+                    <div class="contact-title">
+                        <i class="fas fa-envelope"></i>
+                        ¿Crees que esto es un error?
+                    </div>
+                    <p class="contact-text">
+                        Si consideras que tu IP fue bloqueada por error, contacta al 
+                        administrador del sistema en: 
+                        <a href="mailto:admin@webexplorer.com" class="contact-email">admin@webexplorer.com</a>
+                        proporcionando tu dirección IP y los detalles del problema.
+                    </p>
                 </div>
             </div>
         </body>
         </html>
         <?php
     }
-    
-    public function getClientIP() {
-        $ip_keys = ['HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'HTTP_CLIENT_IP', 'REMOTE_ADDR'];
-        
-        foreach ($ip_keys as $key) {
-            if (!empty($_SERVER[$key])) {
-                $ip = $_SERVER[$key];
-                // Si hay múltiples IPs, tomar la primera
-                if (strpos($ip, ',') !== false) {
-                    $ip = trim(explode(',', $ip)[0]);
-                }
-                if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
-                    return $ip;
-                }
-            }
-        }
-        
-        return $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
-    }
 }
+
+// Crear instancia y ejecutar verificación automáticamente
+$securityMiddleware = new SecurityMiddleware();
+$client_ip = $securityMiddleware->getClientIP();
+$securityMiddleware->checkIP($client_ip);
 ?>
